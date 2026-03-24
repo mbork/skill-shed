@@ -235,10 +235,10 @@ alternative source formats, so no new dependency for mixed workflows.
 * INPROGRESS Skill deployment
 Deploy skills to agents or skill repositories.
 
-** Steps [/]
-- [ ] Define per-skill config file format (deployment target path)
-- [ ] Implement mtime-based safety check (abort if target is newer than source)
-- [ ] Implement deploy command (copy `SKILL.md` from repo to target)
+** Steps [3/3]
+- [X] Define per-skill config file format (deployment target path)
+- [X] Implement mtime-based safety check (abort if target is newer than source)
+- [X] Implement deploy command (copy `SKILL.md` from repo to target)
 ** Decisions
 *** [2026-03-24] – Config file is `.env` alongside `SKILL.md`; deploy script is Node.js
 **** Reason
