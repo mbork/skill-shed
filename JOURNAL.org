@@ -232,7 +232,10 @@ alternative source formats, so no new dependency for mixed workflows.
 - In-script Markdown parser: significant dependency, no advantage over pandoc.
 ** Session log
 
-* INPROGRESS Skill deployment
+* DONE Skill deployment
+:LOGBOOK:
+- State "DONE"       from "INPROGRESS" [2026-03-24 Tue 12:22]
+:END:
 Deploy skills to agents or skill repositories.
 
 ** Steps [3/3]
@@ -258,6 +261,12 @@ the user may have edited it, so abort with an error.
 - No safety check: rejected — would silently destroy edits made in the target.
 - Hash-based check: considered but mtime is simpler and sufficient here.
 ** Session log
+*** [2026-03-24] (session 3)
+- Completed: `skill-shed.ts` with `deploy` command (async fs, `dotenv.config`, mtime guard, auto-create target dir); test suite in `test/skill-shed-test.ts` (7 tests, `node:test`)
+- In progress: n/a — all steps done
+- Next: implement `init` command (create skill dir + `.env`, see temporary notes in README.org for spec)
+- Blockers: NONE
+- Decisions: `dotenv.config` over `dotenv.parse` (user unbothered by `process.env` mutation); removed `file_exists` helper in favour of try/catch on ENOENT; target dir created automatically if missing
 *** [2026-03-24] (session 2)
 - Completed: project scaffolding — `package.json` (Node >=24, bin, ESLint scripts), `eslint.config.mts` (recommended + stylistic), `tsconfig.json` (ES2022, NodeNext, strict, erasableSyntaxOnly)
 - In progress: n/a — no deploy code written yet
