@@ -1,0 +1,274 @@
+#+TITLE: Skill Shed
+#+AUTHOR: Marcin Borkowski
+
+A set of tools (in the form of a Node.js CLI script) for managing
+agent skills: format conversion, comment stripping, linting,
+deployment.  Currently in WiP/PoC stage.
+
+* BLOCKED Emacs batch mode converter for Org → md
+Support using Emacs in batch mode as an alternative to pandoc for
+converting `*.source.org` files to `.md`.
+
+** Blocked by
+- [[*Alternative source formats (Org, AsciiDoc, RST, Docx, ODT)]]
+
+** Steps [/]
+- [ ] Implement Emacs batch mode invocation for Org → md export
+- [ ] Add CONVERTER=emacs option to .env (alongside pandoc default)
+- [ ] Test Emacs export output against pandoc output for common Org constructs
+** Decisions
+*** [2026-03-24] – Emacs batch mode as opt-in alternative to pandoc for Org conversion
+**** Reason
+Emacs org-export is the canonical, most faithful Org → md converter.
+Useful for authors using advanced Org features (tables, drawers, custom
+export settings) that pandoc may not handle correctly.  Opt-in via
+CONVERTER=emacs in .env; pandoc remains the default.
+**** Alternatives considered
+- Emacs as default: not available in all environments.
+- Emacs for all formats: only Org benefits; pandoc handles the rest better.
+** Session log
+
+* TODO Configurable comment stripping (pandoc vs. built-in)
+Allow the comment stripping method to be configurable, with a simple
+built-in HTML comment remover as a pandoc-free fallback.
+
+** Steps [/]
+- [ ] Implement built-in HTML comment stripper (fenced-code-block-aware line scanner)
+- [ ] Add COMMENT_STRIPPER option to .env (pandoc/built-in, default: pandoc)
+- [ ] Document indented-code-block limitation of built-in stripper
+** Decisions
+*** [2026-03-24] – Built-in stripper uses fenced-code-block-aware line scanner
+**** Reason
+Tracking ``` delimiters line by line is simple and correct for the common
+case.  Preserves HTML comments inside fenced code blocks.  Indented code
+blocks (4-space) are not supported — too complex to detect without a full
+parser.  Built-in option exists for environments without pandoc; pandoc
+remains the recommended default.
+**** Alternatives considered
+- Naive regex: incorrect — strips comments inside code blocks.
+- Full Markdown parser: too heavy, no advantage over pandoc.
+** Session log
+
+* TODO Alternative source formats (Org, AsciiDoc, RST, Docx, ODT)
+Support source formats other than `.md` for skill files, converting to
+`.md` at deploy time.
+
+** Steps [/]
+- [ ] Implement Org → md conversion (Emacs or pandoc, configurable)
+- [ ] Implement AsciiDoc/RST → md conversion via pandoc
+- [ ] Decide whether to support Docx/ODT
+- [ ] Abort early (before any action) if multiple source formats produce the same target
+- [ ] Generalize comment stripping to non-md sources (or rely on native comment syntax)
+** Decisions
+*** [2026-03-24] – Org source treated as direct source for SKILL.md, not via tangle
+**** Reason
+Tangle requires wrapping skill content in source blocks, adding
+unnecessary complexity.  Treating the whole Org file as the source
+and converting to md is simpler.  Benefits: Emacs table editing,
+native Org comment syntax (no HTML comments needed), familiar format.
+**** Alternatives considered
+- Org tangle of md source blocks: more complex, no benefit over plain .source.md.
+
+*** [2026-03-24] – Converter configurable (Emacs or pandoc); pandoc as default
+**** Reason
+Pandoc handles all planned formats (Org, AsciiDoc, RST, Docx, ODT) in one
+tool.  Emacs is an alternative for Org specifically, for authors who want
+faithful Org export.  Configurable via .env (e.g. CONVERTER=emacs).
+**** Alternatives considered
+- Emacs only: not available in all environments; overkill for non-Org formats.
+- Hardcode per-format converters: more flexible but more config surface.
+
+*** [2026-03-24] – Abort early if multiple source files would produce the same target
+**** Reason
+Ambiguity about which source is canonical must be caught before any files
+are written.  Applies to all format combinations, not just .org vs .md.
+** Open questions
+- Support Docx/ODT?  Useful for non-technical authors but unusual for
+  skill development.  Pandoc supports both.
+- Should AsciiDoc/RST sources use native comment syntax, or HTML comments
+  like .md sources?
+** Session log
+
+* TODO Skill linting
+Lint skill files for common errors before deployment.
+
+** Steps [/]
+- [ ] Check that `SKILL.md` exists
+- [ ] Check for unclosed HTML comments (`<!--` without `-->`)
+- [ ] Validate frontmatter (required fields, non-empty values, known `type`)
+- [ ] Count characters, words, and tokens in description field and full `SKILL.md`
+- [ ] Check that files referenced in `SKILL.md` exist
+- [ ] Warn on lines exceeding configurable length limit
+- [ ] Warn on empty sections (heading with no content)
+- [ ] Warn on duplicate headings
+- [ ] Warn on trailing whitespace / mixed indentation
+- [ ] Check URLs in `SKILL.md` (opt-in, requires network)
+** Decisions
+** Session log
+
+* BLOCKED Multi-file skill support
+Support deploying skills that consist of more than one file.
+
+** Blocked by
+- [[*Skill deployment]]
+- [[*Skill comment stripping]]
+
+** Steps [/]
+- [ ] Implement `git ls-files`-based manifest with MANIFEST_CMD fallback
+- [ ] Implement `*.source.md` → `*.md` comment stripping for all md files
+- [ ] Implement production mode (abort on any unclean state)
+- [ ] Implement development mode (deploy index or working tree, with reporting)
+- [ ] Implement reading deleted-in-working-tree files from git index
+- [ ] Implement per-file mtime guards
+- [ ] Decide and implement atomicity strategy on partial failure
+- [ ] Decide stale-file policy (deletion vs. warning vs. ignore)
+- [ ] Check config consistency (DEPLOY_DOTFILES lists untracked file; MANIFEST_CMD command not on $PATH)
+** Decisions
+*** [2026-03-24] – File manifest via git ls-files --exclude-standard (run from skill dir); MANIFEST_CMD overrides in .env
+**** Reason
+`git ls-files --exclude-standard` run from the skill directory naturally
+scopes to the skill subtree (monorepo-safe) and respects `.gitignore`,
+`.git/info/exclude`, and the global gitignore — so `.env` and other
+gitignored files are excluded without hardcoding.  MANIFEST_CMD in `.env`
+allows non-git workflows.  Note: `--exclude-standard` only excludes
+untracked files; if `.env` is accidentally committed it will still appear
+— the author must ensure it is gitignored and never committed.
+**** Alternatives considered
+- Explicit manifest file: redundant when git is available.
+- `deploy/` subdirectory convention: requires restructuring skill directories.
+- Hardcoded exclusion list: whack-a-mole, always incomplete.
+
+*** [2026-03-24] – Dotfiles excluded by default; DEPLOY_DOTFILES whitelist in .env for exceptions
+**** Reason
+`git ls-files` alone would deploy `.gitignore` and other dotfiles that are
+tracked but not intended for deployment.  Dotfile exclusion as a second
+filter is simple and covers the common case.  DEPLOY_DOTFILES allows
+opt-in for dotfiles that are legitimate skill assets (e.g. template
+dotfiles).  The two filters are orthogonal: deploy if in `git ls-files`
+AND (not a dotfile OR whitelisted).
+**** Alternatives considered
+- Hardcoded exclusion list: incomplete, requires maintenance.
+- `deploy/` subdirectory: principled but requires restructuring.
+- No dotfile rule: `.gitignore` and similar files would be deployed.
+
+*** [2026-03-24] – Comment stripping applies to all *.source.md files, not just SKILL.source.md
+**** Reason
+Skills may have multiple md files (e.g. help text, examples).  All should
+support the same authoring workflow.  Non-md files are copied verbatim.
+`*.source.md` files are never deployed directly.
+**** Alternatives considered
+- Stripping only SKILL.source.md: too restrictive for multi-file skills.
+
+*** [2026-03-24] – Two deploy modes: production (default) and development
+**** Reason
+Production enforces a fully clean repo (abort on any deviation: staged,
+unstaged, or untracked non-ignored files).  Development supports iterative
+workflows by deploying the index when index ≠ HEAD, otherwise deploying
+the working tree.  No confirmation message in the clean case.
+**** Alternatives considered
+- Single mode: too strict for iterative dev or too loose for production.
+
+*** [2026-03-24] – Development mode deploy source: index if index ≠ HEAD, else working tree
+**** Reason
+One binary check, no per-file branching.  When anything is staged, the
+index is the most intentional snapshot.  When nothing is staged, the
+working tree reflects current edits.
+**** Alternatives considered
+- Always deploy working tree: ignores staged-only changes; deploys
+  working-tree-only changes even when index differs from HEAD elsewhere.
+- Per-file decision: complex and harder to reason about.
+
+*** [2026-03-24] – Reporting logic for development mode
+**** Reason
+Deploy index (index ≠ HEAD): list all deployed files; separately list
+files with unstaged changes not included in the deploy (modified, deleted
+from working tree, untracked non-ignored).  Note: a partially staged file
+may appear in both lists.
+Deploy working tree (index == HEAD, working tree ≠ HEAD): list all
+deployed files marking changed ones (includes untracked non-ignored);
+separately list files in HEAD deleted from working tree (skipped).
+Clean: no output.
+** Session log
+
+* TODO Skill comment stripping
+Strip HTML comments from `SKILL.source.md` (and other `*.source.md` files)
+to produce the deployable skill content.
+
+** Steps [/]
+- [ ] Implement HTML comment stripping for `.md` sources
+- [ ] Integrate stripping step into deploy command (in-memory, no intermediate file)
+- [ ] Add `--dry-run` flag to print stripped output to stdout
+** Decisions
+*** [2026-03-24] – Strip in-memory, no intermediate SKILL.md; add --dry-run for inspection
+**** Reason
+An intermediate git-ignored file adds a third source of truth (source,
+intermediate, target), is silently removed by `git clean`, and its mtime
+guard is prone to false positives from editors/backup tools.  In-memory
+stripping is simpler.  `--dry-run` covers the inspection use case without
+the complexity.
+**** Alternatives considered
+- Intermediate SKILL.md (git-ignored): rejected — unreliable mtime guard,
+  muddy mental model, removed by git clean.
+
+*** [2026-03-24] – Source filename fixed as SKILL.source.md; format is HTML comments
+**** Reason
+Simplicity and consistency.  HTML comments are unambiguous and support
+multiline blocks.  Auto-detected comment char (4 identical leading chars)
+was rejected: `####` is a valid Markdown H4 heading and would be
+misdetected; also line-comments only.
+**** Alternatives considered
+- Auto-detected comment char: rejected — collides with Markdown headings,
+  line-comments only.
+
+*** [2026-03-24] – Strip HTML comments via pandoc, not in-script regex
+**** Reason
+Pandoc handles code blocks correctly (comments inside code blocks are
+preserved as content, not stripped).  A naive regex would incorrectly
+strip them.  A proper in-script Markdown parser is a significant
+dependency — no better than pandoc.  Pandoc is already required for
+alternative source formats, so no new dependency for mixed workflows.
+**** Alternatives considered
+- In-script regex: incorrect for comments inside code blocks.
+- In-script Markdown parser: significant dependency, no advantage over pandoc.
+** Session log
+
+* INPROGRESS Skill deployment
+Deploy skills to agents or skill repositories.
+
+** Steps [/]
+- [ ] Define per-skill config file format (deployment target path)
+- [ ] Implement mtime-based safety check (abort if target is newer than source)
+- [ ] Implement deploy command (copy `SKILL.md` from repo to target)
+** Decisions
+*** [2026-03-24] – Config file is `.env` alongside `SKILL.md`; deploy script is Node.js
+**** Reason
+.env is the simplest format to parse without extra dependencies.  Node.js
+is already the project's runtime.  Config lives next to `SKILL.md` so the
+skill is self-contained in its directory.
+**** Alternatives considered
+- TOML/JSON: more structured but overkill for a small config.
+
+*** [2026-03-24] – Per-skill config file sets deployment target; deploy copies SKILL.md with mtime guard
+**** Reason
+Skills may live in their own repo or a monorepo.  The deploy script must
+not silently overwrite edits made in the target directory.  Comparing
+mtimes gives a simple, filesystem-native guard: if the target is newer,
+the user may have edited it, so abort with an error.
+**** Alternatives considered
+- No safety check: rejected — would silently destroy edits made in the target.
+- Hash-based check: considered but mtime is simpler and sufficient here.
+** Session log
+*** [2026-03-24]
+- Completed: nothing yet — design session only
+- In progress: n/a
+- Next: begin implementing "Skill deployment" (single-file, .source.md → .md, mtime guard)
+- Blockers: NONE
+- Decisions: all logged above
+
+* Config                                                           :noexport:
+#+SEQ_TODO: TODO(!) INPROGRESS(!) | DONE(!)
+#+SEQ_TODO: | CANCELED(!)
+#+SEQ_TODO: BLOCKED(!) TODO(!) |
+#+PROPERTY: CLOCK_INTO_DRAWER t
+#+PROPERTY: LOG_INTO_DRAWER t
+#+CATEGORY: skill-shed
