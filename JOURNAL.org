@@ -258,6 +258,12 @@ the user may have edited it, so abort with an error.
 - No safety check: rejected — would silently destroy edits made in the target.
 - Hash-based check: considered but mtime is simpler and sufficient here.
 ** Session log
+*** [2026-03-24] (session 2)
+- Completed: project scaffolding — `package.json` (Node >=24, bin, ESLint scripts), `eslint.config.mts` (recommended + stylistic), `tsconfig.json` (ES2022, NodeNext, strict, erasableSyntaxOnly)
+- In progress: n/a — no deploy code written yet
+- Next: implement `skill-shed.ts` CLI entry point and `deploy` command (single-file copy, mtime guard)
+- Blockers: NONE
+- Decisions: ES2022 target (safer than ES2024); `jiti` required by ESLint for `.ts` config files; no `bin/` subdir (single executable, root-level `skill-shed.ts`)
 *** [2026-03-24]
 - Completed: nothing yet — design session only
 - In progress: n/a
