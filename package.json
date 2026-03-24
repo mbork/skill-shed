@@ -1,0 +1,32 @@
+{
+  "name": "skill-shed",
+  "version": "0.0.1",
+  "description": "A set of tools for managing agent skills",
+  "keywords": [
+    "skills",
+    "agentic",
+    "coding",
+    "deployment",
+    "linting"
+  ],
+  "homepage": "https://github.com/mbork/skill-shed#readme",
+  "bugs": {
+    "url": "https://github.com/mbork/skill-shed/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mbork/skill-shed.git"
+  },
+  "license": "GPL-3.0",
+  "author": "Marcin Borkowski",
+  "engines": {
+    "node": ">=24"
+  },
+  "type": "module",
+  "bin": {
+    "skill-shed": "skill-shed.ts"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
