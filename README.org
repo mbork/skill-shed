@@ -1,0 +1,5 @@
+#+TITLE: Skill shed – a shed of tools for managing agent skills
+#+AUTHOR: Marcin Borkowski
+
+A set of tools for managing agent skills: format conversion, comment
+stripping, linting, deployment.  Currently in WiP/PoC stage.
