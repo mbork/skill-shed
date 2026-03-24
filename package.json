@@ -27,10 +27,16 @@
     "skill-shed": "skill-shed.ts"
   },
   "scripts": {
+    "lint": "eslint .",
     "test": "echo \"Error: no test specified\" && exit 1",
     "typecheck": "tsgo --noEmit"
   },
   "devDependencies": {
-    "@typescript/native-preview": "7.0.0-dev.20260324.1"
+    "@eslint/js": "10.0.1",
+    "@typescript/native-preview": "7.0.0-dev.20260324.1",
+    "eslint": "10.1.0",
+    "jiti": "2.6.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.57.2"
   }
 }
