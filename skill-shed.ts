@@ -36,7 +36,9 @@ async function main(): Promise<void> {
 	}
 }
 
-if (import.meta.main) await main()
+if (import.meta.main) {
+	await main()
+}
 
 // ** init
 async function init(skill_dir: string, deploy_dir_arg?: string): Promise<void> {
@@ -53,7 +55,9 @@ async function init(skill_dir: string, deploy_dir_arg?: string): Promise<void> {
 		console.error(`Error: .env already exists in ${skill_dir}`)
 		process.exit(1)
 	} catch (e: unknown) {
-		if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e
+		if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+			throw e
+		}
 	}
 
 	await mkdir(skill_dir, {recursive: true})
@@ -65,7 +69,9 @@ async function init(skill_dir: string, deploy_dir_arg?: string): Promise<void> {
 		await stat(skill_md_path)
 		skill_md_exists = true
 	} catch (e: unknown) {
-		if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e
+		if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+			throw e
+		}
 	}
 	if (!skill_md_exists) {
 		const template_path = resolve(import.meta.dirname, 'SKILL.template.md')
@@ -108,7 +114,9 @@ async function deploy(skill_dir: string): Promise<void> {
 	try {
 		target_mtime = (await stat(target_path)).mtimeMs
 	} catch (e: unknown) {
-		if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e
+		if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+			throw e
+		}
 	}
 
 	if (target_mtime !== null) {

@@ -11,6 +11,7 @@ export default ts_eslint.config(
 			'@stylistic/no-tabs': ['error', {allowIndentationTabs: true}],
 			'@stylistic/object-curly-spacing': ['error', 'never'],
 			'@stylistic/brace-style': ['error', '1tbs'],
+			'curly': 'error',
 			'dot-notation': 'error',
 		},
 	},
