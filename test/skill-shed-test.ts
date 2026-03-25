@@ -50,6 +50,25 @@ async function make_tmp_dir(): Promise<string> {
 
 // ** Init
 
+const MY_SKILL_SOURCE_CONTENT = [
+	'---',
+	'name: my-skill',
+	'description: >',
+	'  What this skill does – generates files?  Executes shell scripts?',
+	'  Sends HTTP requests?  When to use it – when the user asks or',
+	'  mentions something?  Uploads a file of specific type?',
+	'allowed-tools: Read, Bash(rg *)',
+	'---',
+	'',
+	'<!-- NOTE: HTML comments are stripped on skill deployment, except',
+	'     inside code blocks.  To disable stripping for a file, remove',
+	'     `.source` from its name.  For example, to disable stripping',
+	'     here, rename this file from SKILL.source.md to SKILL.md.     -->',
+	'',
+	'# My-skill skill',
+].join('\n')
+
+// Two blank lines because the comment block (between the two blank lines) is stripped
 const MY_SKILL_CONTENT = [
 	'---',
 	'name: my-skill',
@@ -59,6 +78,7 @@ const MY_SKILL_CONTENT = [
 	'  mentions something?  Uploads a file of specific type?',
 	'allowed-tools: Read, Bash(rg *)',
 	'---',
+	'',
 	'',
 	'# My-skill skill',
 ].join('\n')
@@ -82,7 +102,7 @@ test('init: creates skill dir, .env, and SKILL.source.md by default', async () =
 	)
 	assert.strictEqual(
 		(await readFile(join(skill_dir, 'SKILL.source.md'), 'utf8')).trim(),
-		MY_SKILL_CONTENT,
+		MY_SKILL_SOURCE_CONTENT,
 	)
 	const files = await readdir(skill_dir)
 	assert.deepStrictEqual(files.sort(), ['.env', 'SKILL.source.md'])
@@ -132,7 +152,7 @@ test('init: --comments creates SKILL.source.md', async () => {
 	)
 	assert.strictEqual(
 		(await readFile(join(skill_dir, 'SKILL.source.md'), 'utf8')).trim(),
-		MY_SKILL_CONTENT,
+		MY_SKILL_SOURCE_CONTENT,
 	)
 	const files = await readdir(skill_dir)
 	assert.deepStrictEqual(files.sort(), ['.env', 'SKILL.source.md'])
@@ -320,7 +340,7 @@ test('init: default deploy dir is ~/.claude/skills/<skill-name>', async () => {
 	)
 	assert.strictEqual(
 		(await readFile(join(skill_dir, 'SKILL.source.md'), 'utf8')).trim(),
-		MY_SKILL_CONTENT,
+		MY_SKILL_SOURCE_CONTENT,
 	)
 	const files = await readdir(skill_dir)
 	assert.deepStrictEqual(files.sort(), ['.env', 'SKILL.source.md'])

@@ -297,14 +297,14 @@ Clean: no output.
 Strip HTML comments from `SKILL.source.md` (and other `*.source.md` files)
 to produce the deployable skill content.
 
-** Steps [4/8]
+** Steps [7/8]
 - [X] Implement built-in HTML comment stripper (fenced-code-block-aware, string → string)
 - [X] Add tests for the comment stripper function
 - [X] Make `--comments` and `--no-comments` mutually exclusive
 - [X] Update `init` to create `SKILL.source.md` by default; add `--no-comments` flag to create `SKILL.md` instead
-- [ ] Add an example HTML comment (explicitly delimited for removal) to `SKILL.template.md`
-- [ ] Implement `--no-comments` path: strip example block from template before writing `SKILL.md`
-- [ ] Add tests for both `init` paths (default and `--no-comments`)
+- [X] Add an example HTML comment (explicitly delimited for removal) to `SKILL.template.md`
+- [X] Implement `--no-comments` path: strip example block from template before writing `SKILL.md`
+- [X] Add tests for both `init` paths (default and `--no-comments`)
 - [ ] Integrate stripping step into deploy command (in-memory, no intermediate file)
 ** Decisions
 *** [2026-03-25] – Stay with `node:util`'s `parseArgs` for CLI argument handling (no library)

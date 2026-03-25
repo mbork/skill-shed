@@ -6,6 +6,7 @@ import {resolve, basename} from 'node:path'
 import {homedir} from 'node:os'
 import {parseArgs} from 'node:util'
 import {config as dotenv_config} from 'dotenv'
+import {strip_html_comments} from './strip-html-comments.ts'
 
 // * Utilities
 
@@ -119,9 +120,11 @@ async function init(skill_dir: string, deploy_dir_arg?: string, comments_mode: b
 		)
 		const template_path = resolve(import.meta.dirname, 'SKILL.template.md')
 		const template = await readFile(template_path, 'utf8')
-		const skill_content = template
+		const substituted = template
 			.replace('{{name}}', skill_name)
 			.replace('{{Name}}', skill_name.charAt(0).toUpperCase() + skill_name.slice(1))
+		const should_strip_comments = !(comments_mode ?? true)
+		const skill_content = should_strip_comments ? strip_html_comments(substituted) : substituted
 		await writeFile(new_skill_path, skill_content)
 	}
 
