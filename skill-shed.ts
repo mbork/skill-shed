@@ -1,7 +1,7 @@
 #!/usr/bin/env -S node --experimental-strip-types
 
 // * Imports
-import {stat, copyFile, mkdir, readFile, writeFile} from 'node:fs/promises'
+import {copyFile, mkdir, readFile, readdir, stat, writeFile} from 'node:fs/promises'
 import {resolve, basename} from 'node:path'
 import {homedir} from 'node:os'
 import {parseArgs} from 'node:util'
@@ -23,9 +23,13 @@ export function target_filename(source: string): string {
 
 // ** main
 async function main(): Promise<void> {
-	const {positionals} = parseArgs({
+	const {positionals, values} = parseArgs({
 		args: process.argv.slice(2),
 		allowPositionals: true,
+		options: {
+			'comments': {type: 'boolean'},
+			'no-comments': {type: 'boolean'},
+		},
 	})
 
 	const [command, skill_dir_arg] = positionals
@@ -38,8 +42,14 @@ async function main(): Promise<void> {
 
 	const skill_dir = skill_dir_arg ? resolve(skill_dir_arg) : process.cwd()
 
+	if (values.comments && values['no-comments']) {
+		console.error('Error: --comments and --no-comments are mutually exclusive')
+		process.exit(1)
+	}
+	const comments_mode = values.comments ? true : values['no-comments'] ? false : null
+
 	if (command === 'init') {
-		await init(skill_dir, positionals[2])
+		await init(skill_dir, positionals[2], comments_mode)
 	} else if (command === 'deploy') {
 		await deploy(skill_dir)
 	} else {
@@ -53,45 +63,66 @@ if (import.meta.main) {
 }
 
 // ** init
-async function init(skill_dir: string, deploy_dir_arg?: string): Promise<void> {
+async function init(skill_dir: string, deploy_dir_arg?: string, comments_mode: boolean | null = null): Promise<void> {
 	const skill_name = basename(skill_dir)
 	const deploy_dir = deploy_dir_arg
 		? resolve(deploy_dir_arg)
 		: resolve(homedir(), '.claude', 'skills', skill_name)
-	const env_path = resolve(skill_dir, '.env')
-
-	// Here the logic of `try ... catch ...` is reversed compared to the usual case: file existing
-	// is an error condition.
-	try {
-		await stat(env_path)
-		console.error(`Error: .env already exists in ${skill_dir}`)
-		process.exit(1)
-	} catch (e: unknown) {
-		if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
-			throw e
-		}
-	}
 
 	await mkdir(skill_dir, {recursive: true})
-	await writeFile(env_path, `TARGET_DIRECTORY=${deploy_dir}\n`)
 
-	const skill_md_path = resolve(skill_dir, 'SKILL.md')
-	let skill_md_exists = false
-	try {
-		await stat(skill_md_path)
-		skill_md_exists = true
-	} catch (e: unknown) {
-		if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
-			throw e
-		}
+	const existing = new Set((await readdir(skill_dir)).sort())
+
+	const by_target = new Map<string, string[]>()
+	for (const file of existing) {
+		const target = target_filename(file)
+		const group = by_target.get(target) ?? []
+		group.push(file)
+		by_target.set(target, group)
 	}
-	if (!skill_md_exists) {
+	const conflicts = [...by_target.values()].filter(group => group.length > 1)
+	if (conflicts.length > 0) {
+		const conflict_list = conflicts.map(group => group.join(', ')).join('; ')
+		console.error(`Error: conflicting files in ${skill_dir}: ${conflict_list}`)
+		process.exit(1)
+	}
+
+	if (existing.has('.env')) {
+		console.error(`Error: .env already exists in ${skill_dir}`)
+		process.exit(1)
+	}
+
+	const is_skill_md_present = existing.has('SKILL.md')
+	const is_skill_source_md_present = existing.has('SKILL.source.md')
+	const is_skill_file_present = is_skill_md_present || is_skill_source_md_present
+
+	if (is_skill_source_md_present) {
+		if (comments_mode === false) {
+			console.error(`Error: cannot initialize SKILL.md when SKILL.source.md is present`)
+			process.exit(1)
+		}
+		console.log(`SKILL.source.md already exists`)
+	} else if (is_skill_md_present) {
+		if (comments_mode === true) {
+			console.error(`Error: cannot initialize SKILL.source.md when SKILL.md is present`)
+			process.exit(1)
+		}
+		console.log(`SKILL.md already exists`)
+	}
+
+	await writeFile(resolve(skill_dir, '.env'), `TARGET_DIRECTORY=${deploy_dir}\n`)
+
+	if (!is_skill_file_present) {
+		const new_skill_path = resolve(
+			skill_dir,
+			(comments_mode ?? true) ? 'SKILL.source.md' : 'SKILL.md',
+		)
 		const template_path = resolve(import.meta.dirname, 'SKILL.template.md')
 		const template = await readFile(template_path, 'utf8')
-		const skill_md = template
+		const skill_content = template
 			.replace('{{name}}', skill_name)
 			.replace('{{Name}}', skill_name.charAt(0).toUpperCase() + skill_name.slice(1))
-		await writeFile(skill_md_path, skill_md)
+		await writeFile(new_skill_path, skill_content)
 	}
 
 	console.log(`Initialized ${skill_dir}`)

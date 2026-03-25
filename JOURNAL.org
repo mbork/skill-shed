@@ -297,16 +297,27 @@ Clean: no output.
 Strip HTML comments from `SKILL.source.md` (and other `*.source.md` files)
 to produce the deployable skill content.
 
-** Steps [2/7]
+** Steps [4/8]
 - [X] Implement built-in HTML comment stripper (fenced-code-block-aware, string → string)
 - [X] Add tests for the comment stripper function
-- [ ] Make `--comments` and `--no-comments` mutually exclusive
-- [ ] Update `init` to create `SKILL.source.md` by default; add `--no-comments` flag to create `SKILL.md` instead
+- [X] Make `--comments` and `--no-comments` mutually exclusive
+- [X] Update `init` to create `SKILL.source.md` by default; add `--no-comments` flag to create `SKILL.md` instead
 - [ ] Add an example HTML comment (explicitly delimited for removal) to `SKILL.template.md`
 - [ ] Implement `--no-comments` path: strip example block from template before writing `SKILL.md`
 - [ ] Add tests for both `init` paths (default and `--no-comments`)
 - [ ] Integrate stripping step into deploy command (in-memory, no intermediate file)
 ** Decisions
+*** [2026-03-25] – Stay with `node:util`'s `parseArgs` for CLI argument handling (no library)
+**** Reason
+`parseArgs` handles current and near-future needs: subcommands, boolean flag pairs like
+`--comments`/`--no-comments` (post-parse mutual-exclusion check), per-subcommand options.
+`--help` is maintainable as a `print_usage()` helper.  Assessed for both internal and
+public-tool scenarios — conclusion unchanged.
+**** Alternatives considered
+- `commander` (zero prod deps): the only library that clears the project's dependency bar,
+  but current complexity does not justify it.  Revisit if subcommand count or flag
+  interactions grow significantly.
+- `yargs` and others: rejected — too many transitive dependencies.
 *** [2026-03-25] – `init` logic for existing directories
 **** Reason
 After several design iterations, the agreed `init` flow is:
@@ -391,6 +402,19 @@ alternative source formats, so no new dependency for mixed workflows.
 - In-script regex: incorrect for comments inside code blocks.
 - In-script Markdown parser: significant dependency, no advantage over pandoc.
 ** Session log
+*** [2026-03-25] (session 2)
+- Completed: steps 3 & 4 — `--comments`/`--no-comments` flags with mutual exclusion in
+  `skill-shed.ts`; `init()` creates `SKILL.source.md` by default or `SKILL.md` with
+  `--no-comments`; conflict detection via `target_filename` over `readdir` result;
+  `comments_mode: boolean | null` with `??` operator; full init test overhaul (34 tests,
+  `trim()` + `[...].join('\n')` idiom, `MY_SKILL_CONTENT` constant, 3 new tests added)
+- In progress: steps 5–8 not started
+- Next: add example HTML comment to `SKILL.template.md` (step 5)
+- Blockers: NONE
+- Decisions: use `readdir`+`Set` for all file checks (one syscall, no TOCTOU); `null` not
+  `undefined` for unset `comments_mode` (explicit absence, enables `??` operator);
+  boolean vars use `is_`/`does_` prefix (user adding to CLAUDE.md); `parseArgs` decision
+  already logged above
 *** [2026-03-25]
 - Completed: `strip_html_comments` in `strip-html-comments.ts` (fenced-block-aware scanner);
   10 unit tests using `[...].join('\n')` idiom; `allowImportingTsExtensions` in `tsconfig.json`;
