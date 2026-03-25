@@ -189,24 +189,53 @@ Add a general usage message (printed when no command is given or when
 ** Decisions
 ** Session log
 
-* TODO Skill linting
+* BLOCKED Skill linting
 Lint skill files for common errors before deployment.
+
+** Blocked by
+- [[*Preserve line numbers while comment stripping]]
 
 ** Steps [/]
 - [ ] Check that `SKILL.md` exists
 - [ ] Check for unclosed HTML comments (`<!--` without `-->`)
-- [ ] Validate frontmatter (required fields, non-empty values, known `type`)
+- [ ] Validate frontmatter (required fields, non-empty values, known types)
 - [ ] Count characters, words, and tokens in description field and full `SKILL.md`
 - [ ] Check that files referenced in `SKILL.md` exist
 - [ ] Warn on lines exceeding configurable length limit
 - [ ] Warn on empty sections (heading with no content)
 - [ ] Warn on duplicate headings
-- [ ] Warn on trailing whitespace / mixed indentation
+- [ ] Maybe warn on files not referenced anywhere?
 - [ ] Check URLs in `SKILL.md` (opt-in, requires network)
+** Decisions
+** Open questions
+- what valid values exist for which frontmatter field?
+- Output format: all messages to stdout, or errors to stderr / warnings+info to stdout?
+- Line length limit: configurable via ~.env~, CLI flag, or hardcoded default (100)?
+- Token counting: is a chars/4 approximation acceptable, or is a real tokenizer needed?
+- Line numbers after pandoc conversion: lint messages would reference converted Markdown
+  line numbers, not original source — acceptable as a known limitation?
+** Session log
+
+* TODO Preserve line numbers while comment stripping
+Extend ~strip_html_comments~ to return a source-line mapping alongside the stripped
+content, so that lint messages can reference original source line numbers even after
+comment lines are removed.
+
+** Steps [/]
+- [ ] Define mapping type: array mapping each stripped content line index to its source line index
+- [ ] To facilitate linting, add more data to the result of stripping (line number where the
+  unclosed comment started, or null if all comments were closed)
+- [ ] Extend ~strip_html_comments~ to return stripped content together with the line mapping
+- [ ] Update callers (~deploy~, ~init~) to use the new return value (ignoring the mapping where not needed)
+- [ ] Add tests for line mapping correctness
+
 ** Decisions
 ** Session log
 
-* BLOCKED Multi-file skill support
+* TODO Multi-file skill support
+:LOGBOOK:
+- State "TODO"       from "BLOCKED"    [2026-03-25 Wed 16:29]
+:END:
 Support deploying skills that consist of more than one file.
 
 ** Blocked by
@@ -214,7 +243,9 @@ Support deploying skills that consist of more than one file.
 - [[*Skill comment stripping]]
 
 ** Steps [/]
-- [ ] Implement `git ls-files`-based manifest with MANIFEST_CMD fallback
+- [ ] Implement `git ls-files`-based manifest with MANIFEST_CMD fallback.  Make it a function which
+  returns a ~Map~ with filenames as keys and contents plus mtimes as values (~Buffer~​s in case of
+  binary files)
 - [ ] Implement `*.source.md` → `*.md` comment stripping for all md files
 - [ ] Implement production mode (abort on any unclean state)
 - [ ] Implement development mode (deploy index or working tree, with reporting)
