@@ -217,14 +217,19 @@ separately list files in HEAD deleted from working tree (skipped).
 Clean: no output.
 ** Session log
 
-* TODO Skill comment stripping
+* INPROGRESS Skill comment stripping
+:LOGBOOK:
+- State "INPROGRESS" from "TODO"       [2026-03-25 Wed 08:26]
+:END:
 Strip HTML comments from `SKILL.source.md` (and other `*.source.md` files)
 to produce the deployable skill content.
 
 ** Steps [/]
-- [ ] Implement HTML comment stripping for `.md` sources
+- [ ] Update `init` to create `SKILL.source.md` by default; add `--no-comments` flag to create `SKILL.md` instead
+- [ ] Add an example HTML comment (explicitly delimited for removal) to `SKILL.template.md`
+- [ ] Implement `--no-comments` path: strip example block from template before writing `SKILL.md`
+- [ ] Add tests for both `init` paths (default and `--no-comments`)
 - [ ] Integrate stripping step into deploy command (in-memory, no intermediate file)
-- [ ] Add `--dry-run` flag to print stripped output to stdout
 ** Decisions
 *** [2026-03-24] – Strip in-memory, no intermediate SKILL.md; add --dry-run for inspection
 **** Reason
@@ -246,6 +251,21 @@ misdetected; also line-comments only.
 **** Alternatives considered
 - Auto-detected comment char: rejected — collides with Markdown headings,
   line-comments only.
+
+*** [2026-03-25] – `init` creates `SKILL.source.md` by default; `--no-comments` creates `SKILL.md`
+**** Reason
+Comment stripping is a core feature; making it the default improves discoverability and
+establishes the right habit from day one.  `--no-comments` is available for users who don't
+need it.  A single template file is used for both paths; the `--no-comments` path strips the
+example comment block (explicitly delimited) before writing `SKILL.md`.  Pandoc is the
+PoC-only stripper until the built-in implementation lands — the built-in stripper is a
+hard prerequisite for any stability milestone.
+**** Alternatives considered
+- `init` creates `SKILL.md` by default (opt-in rename to `.source.md`): less discoverable,
+  comment stripping is a second-class citizen.
+- Two template files: rejected — maintenance burden, content drift risk.
+- `--no-comments` flag name: clearer intent, but `--no-source` is consistent with the
+  `.source.md` naming convention used throughout the tool.
 
 *** [2026-03-24] – Strip HTML comments via pandoc, not in-script regex
 **** Reason
