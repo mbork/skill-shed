@@ -65,7 +65,7 @@ CONVERTER=emacs in .env; pandoc remains the default.
 - Emacs for all formats: only Org benefits; pandoc handles the rest better.
 ** Session log
 
-* TODO Configurable comment stripping (pandoc vs. built-in)
+* CANCELED Configurable comment stripping (pandoc vs. built-in)
 Allow the comment stripping method to be configurable, with a simple
 built-in HTML comment remover as a pandoc-free fallback.
 
@@ -85,6 +85,17 @@ remains the recommended default.
 - Naive regex: incorrect — strips comments inside code blocks.
 - Full Markdown parser: too heavy, no advantage over pandoc.
 ** Session log
+*** [2026-03-25]
+- Completed: N/A — canceled before implementation
+- In progress: N/A
+- Next: N/A
+- Blockers: N/A
+- Decisions: canceled because (1) pandoc does not strip HTML comments by default and requires
+  a Lua filter, (2) pandoc strips YAML frontmatter by default, (3) pandoc rewrites markdown
+  formatting as a side effect of round-tripping, (4) the built-in fenced-code-block-aware
+  scanner covers all real use cases with no extra complexity, (5) two code paths double the
+  test surface for no user-visible benefit.  Pandoc's role stays strictly format conversion
+  for non-md sources; all comment stripping uses the built-in scanner.
 
 * TODO Improve and test the CLI UI
 Make all commands work in the current directory.  Allow specifying
@@ -262,12 +273,24 @@ Strip HTML comments from `SKILL.source.md` (and other `*.source.md` files)
 to produce the deployable skill content.
 
 ** Steps [/]
+- [ ] Implement built-in HTML comment stripper (fenced-code-block-aware, string → string)
+- [ ] Add tests for the comment stripper function
 - [ ] Update `init` to create `SKILL.source.md` by default; add `--no-comments` flag to create `SKILL.md` instead
 - [ ] Add an example HTML comment (explicitly delimited for removal) to `SKILL.template.md`
 - [ ] Implement `--no-comments` path: strip example block from template before writing `SKILL.md`
 - [ ] Add tests for both `init` paths (default and `--no-comments`)
 - [ ] Integrate stripping step into deploy command (in-memory, no intermediate file)
 ** Decisions
+*** [2026-03-25] – Built-in stripper implemented now instead of pandoc
+**** Reason
+Pandoc does not strip HTML comments by default; it also strips the YAML frontmatter by
+default.  Adding a Lua filter would defeat the purpose of using pandoc for simplicity.
+The built-in fenced-code-block-aware scanner (already planned in "Configurable comment
+stripping") is therefore the immediate implementation path.
+**** Alternatives considered
+- Pandoc with Lua filter: rejected — pandoc behavior requires too many workarounds (frontmatter
+  loss, no default comment stripping), and a Lua filter adds complexity rather than saving it.
+
 *** [2026-03-24] – Strip in-memory, no intermediate SKILL.md; add --dry-run for inspection
 **** Reason
 An intermediate git-ignored file adds a third source of truth (source,
