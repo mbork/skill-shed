@@ -49,6 +49,20 @@ remains the recommended default.
 - Full Markdown parser: too heavy, no advantage over pandoc.
 ** Session log
 
+* TODO Improve and test the CLI UI
+Make all commands work in the current directory.  Allow specifying
+~deploy_dir~ in ~deploy~ (overrides ~.env~).  Allow omitting positional
+arguments.  Consider adding non-positional arguments ~--skill-dir~ and
+~--deploy-dir~.  Add tests for all those cases.
+
+** Steps [/]
+- [ ] Make all commands default to current directory when no skill-dir given
+- [ ] Allow specifying deploy_dir in deploy command (overrides .env)
+- [ ] Consider adding --skill-dir and --deploy-dir named flags
+- [ ] Add tests for all new argument forms
+** Decisions
+** Session log
+
 * TODO Alternative source formats (Org, AsciiDoc, RST, Docx, ODT)
 Support source formats other than `.md` for skill files, converting to
 `.md` at deploy time.
@@ -87,6 +101,19 @@ are written.  Applies to all format combinations, not just .org vs .md.
   skill development.  Pandoc supports both.
 - Should AsciiDoc/RST sources use native comment syntax, or HTML comments
   like .md sources?
+** Session log
+
+* TODO Help/usage messages
+Add a general usage message (printed when no command is given or when
+`help` is the command) and per-command help messages (printed via
+`help <command>`).
+
+** Steps [/]
+- [ ] Add `help` command: print general usage listing all commands with one-line descriptions
+- [ ] Add per-command help: `help deploy`, `help init` print detailed usage for that command
+- [ ] Replace the current inline usage strings with calls to the new help functions
+- [ ] Support `--help` / `-h` flag as an alias for the `help` command
+** Decisions
 ** Session log
 
 * TODO Skill linting
