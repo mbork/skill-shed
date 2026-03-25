@@ -3,3 +3,30 @@
 
 A set of tools for managing agent skills: format conversion, comment
 stripping, linting, deployment.  Currently in WiP/PoC stage.
+
+* Features
+** Initialize a skill directory
+** Copy ~SKILL.md~ to a directory specified in ~.env~
+** TODO Strip HTML comments from ~SKILL.md~
+** TODO Deploy multifile skills
+** TODO Lint skills
+** TODO Allow for writing skills in formats other than Markdown
+
+* Usage
+
+Initialize a skill directory:
+#+begin_src shell
+  skill-shed init <skill-directory> [<deploy-directory>]
+#+end_src
+By default, skills will be deployed to =~/.claude/skills=.
+
+Deploy a skill:
+#+begin_src shell
+  skill-shed deploy <skill-directory>
+#+end_src
+
+* Development
+
+- ~npm test~ to run tests
+- ~npm run typecheck~ to check typing
+- ~npm run lint~ to Eslint-check the source code
