@@ -300,12 +300,40 @@ to produce the deployable skill content.
 ** Steps [2/7]
 - [X] Implement built-in HTML comment stripper (fenced-code-block-aware, string → string)
 - [X] Add tests for the comment stripper function
+- [ ] Make `--comments` and `--no-comments` mutually exclusive
 - [ ] Update `init` to create `SKILL.source.md` by default; add `--no-comments` flag to create `SKILL.md` instead
 - [ ] Add an example HTML comment (explicitly delimited for removal) to `SKILL.template.md`
 - [ ] Implement `--no-comments` path: strip example block from template before writing `SKILL.md`
 - [ ] Add tests for both `init` paths (default and `--no-comments`)
 - [ ] Integrate stripping step into deploy command (in-memory, no intermediate file)
 ** Decisions
+*** [2026-03-25] – `init` logic for existing directories
+**** Reason
+After several design iterations, the agreed `init` flow is:
+1. If =skill_dir= exists, read its file list; else create it (file list = []).
+2. If any two files share the same deploy target (=target_filename=): abort
+   "Cannot initialize, conflicting files: {{list}}".
+3. Set =does_skill_file_exist= = false.
+4. If =SKILL.source.md= exists:
+   - If =--no-comments=: abort "Cannot initialize =SKILL.md= when =SKILL.source.md= present".
+   - Tell user "=SKILL.source.md= already exists"; set =does_skill_file_exist= = true.
+5. Else if =SKILL.md= exists:
+   - If =--comments=: abort "Cannot initialize =SKILL.source.md= when =SKILL.md= present".
+   - Tell user "=SKILL.md= already exists"; set =does_skill_file_exist= = true.
+6. If =.env= exists: abort "Cannot initialize, =.env= already present".
+   Else: create =.env= and tell user "=.env= created".
+7. If =not does_skill_file_exist=: create =SKILL.source.md= (default) or =SKILL.md= (=--no-comments=).
+
+When no flag is passed and =SKILL.md= already exists, =init= accepts it without
+aborting; =deploy= autodetects which source file is present.  This keeps =init=
+non-destructive for re-initialization (e.g. adding =.env= to an existing skill dir).
+**** Alternatives considered
+- Abort when default (~--comments~) doesn't match existing file:
+  rejected — unnecessarily obstructive for re-init workflows where the
+  user just wants to add =.env=.
+- Check =.env= before source-file conflicts: rejected — produces partial writes
+  (=.env= created before a later abort fires).
+
 *** [2026-03-25] – Built-in stripper implemented now instead of pandoc
 **** Reason
 Pandoc does not strip HTML comments by default; it also strips the YAML frontmatter by
@@ -363,6 +391,14 @@ alternative source formats, so no new dependency for mixed workflows.
 - In-script regex: incorrect for comments inside code blocks.
 - In-script Markdown parser: significant dependency, no advantage over pandoc.
 ** Session log
+*** [2026-03-25]
+- Completed: `strip_html_comments` in `strip-html-comments.ts` (fenced-block-aware scanner);
+  10 unit tests using `[...].join('\n')` idiom; `allowImportingTsExtensions` in `tsconfig.json`;
+  renamed file and function; improved variable naming (`is_` prefix for booleans, `match`/`fence_match`)
+- In progress: `init` redesign — logic fully designed and logged, not yet implemented
+- Next: implement `--comments`/`--no-comments` mutual exclusion, then update `init` with the new flow
+- Blockers: NONE
+- Decisions: full `init` flow for existing directories (logged); `deploy` autodetects source file
 
 * DONE Initialize new skill directory
 :LOGBOOK:
