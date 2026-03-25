@@ -52,7 +52,9 @@ test('init: creates skill dir and .env when dir does not exist', async () => {
 	const parent = await make_tmp_dir()
 	const skill_dir = join(parent, 'my-skill')
 	const deploy_dir = await make_tmp_dir()
+
 	const result = await run_init(skill_dir, deploy_dir)
+
 	assert.strictEqual(result.code, 0)
 	assert.match(result.stdout, /Initialized/)
 	assert.match(result.stdout, new RegExp(`TARGET_DIRECTORY=${deploy_dir}`))
@@ -73,7 +75,9 @@ test('init: creates .env in existing dir', async () => {
 	const deploy_dir = await make_tmp_dir()
 	const skill_md_content = '# My skill\n'
 	await writeFile(join(skill_dir, 'SKILL.md'), skill_md_content)
+
 	const result = await run_init(skill_dir, deploy_dir)
+
 	assert.strictEqual(result.code, 0)
 	assert.match(result.stdout, /Initialized/)
 	assert.match(result.stdout, new RegExp(`TARGET_DIRECTORY=${deploy_dir}`))
@@ -89,7 +93,9 @@ test('init: aborts if .env already exists', async () => {
 	const skill_dir = await make_tmp_dir()
 	const original_env = 'TARGET_DIRECTORY=/some/path\n'
 	await writeFile(join(skill_dir, '.env'), original_env)
+
 	const result = await run_init(skill_dir)
+
 	assert.strictEqual(result.code, 1)
 	assert.strictEqual(result.stdout, '')
 	assert.match(result.stderr, /\.env already exists/)
@@ -104,7 +110,9 @@ test('init: does not create SKILL.md if it already exists', async () => {
 	const deploy_dir = await make_tmp_dir()
 	const original = '# Existing skill\n'
 	await writeFile(join(skill_dir, 'SKILL.md'), original)
+
 	const result = await run_init(skill_dir, deploy_dir)
+
 	assert.strictEqual(result.code, 0)
 	assert.match(result.stdout, /Initialized/)
 	assert.match(result.stdout, new RegExp(`TARGET_DIRECTORY=${deploy_dir}`))
@@ -115,7 +123,9 @@ test('init: does not create SKILL.md if it already exists', async () => {
 test('init: default deploy dir is ~/.claude/skills/<skill-name>', async () => {
 	const parent = await make_tmp_dir()
 	const skill_dir = join(parent, 'my-skill')
+
 	const result = await run_init(skill_dir)
+
 	assert.strictEqual(result.code, 0)
 	const expected_deploy_dir = resolve(homedir(), '.claude', 'skills', basename(skill_dir))
 	assert.match(result.stdout, /Initialized/)
@@ -128,7 +138,9 @@ test('init: default deploy dir is ~/.claude/skills/<skill-name>', async () => {
 
 test('deploy: missing .env', async () => {
 	const skill_dir = await make_tmp_dir()
+
 	const result = await run_deploy(skill_dir)
+
 	assert.strictEqual(result.code, 1)
 	assert.match(result.stderr, /no \.env file found/)
 })
@@ -136,7 +148,9 @@ test('deploy: missing .env', async () => {
 test('deploy: missing TARGET_DIRECTORY in .env', async () => {
 	const skill_dir = await make_tmp_dir()
 	await writeFile(join(skill_dir, '.env'), '# no TARGET_DIRECTORY here\n')
+
 	const result = await run_deploy(skill_dir)
+
 	assert.strictEqual(result.code, 1)
 	assert.match(result.stderr, /TARGET_DIRECTORY not set/)
 })
@@ -145,7 +159,9 @@ test('deploy: missing SKILL.md', async () => {
 	const skill_dir = await make_tmp_dir()
 	const target_dir = await make_tmp_dir()
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+
 	const result = await run_deploy(skill_dir)
+
 	assert.strictEqual(result.code, 1)
 })
 
@@ -154,7 +170,9 @@ test('deploy: target directory is created if missing', async () => {
 	const content = '# Test skill\n'
 	await writeFile(join(skill_dir, 'SKILL.md'), content)
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${skill_dir}/nonexistent\n`)
+
 	const result = await run_deploy(skill_dir)
+
 	assert.strictEqual(result.code, 0)
 	const deployed = await readFile(join(skill_dir, 'nonexistent', 'SKILL.md'), 'utf8')
 	assert.strictEqual(deployed, content)
@@ -166,7 +184,9 @@ test('deploy: successful deploy', async () => {
 	const content = '# My skill\n'
 	await writeFile(join(skill_dir, 'SKILL.md'), content)
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+
 	const result = await run_deploy(skill_dir)
+
 	assert.strictEqual(result.code, 0)
 	const deployed = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
 	assert.strictEqual(deployed, content)
@@ -180,13 +200,16 @@ test('deploy: mtime guard aborts when target is newer', async () => {
 
 	// First deploy
 	const first = await run_deploy(skill_dir)
+
 	assert.strictEqual(first.code, 0)
 
 	// Make target appear newer than source
 	const future = new Date(Date.now() + 60_000)
 	await utimes(join(target_dir, 'SKILL.md'), future, future)
 
+	// Second deploy
 	const second = await run_deploy(skill_dir)
+
 	assert.strictEqual(second.code, 1)
 	assert.match(second.stderr, /is newer than source/)
 })
@@ -199,12 +222,15 @@ test('deploy: mtime guard allows deploy when source is newer', async () => {
 
 	// First deploy
 	const first = await run_deploy(skill_dir)
+
 	assert.strictEqual(first.code, 0)
 
 	// Make source appear newer than target
 	const future = new Date(Date.now() + 60_000)
 	await utimes(join(skill_dir, 'SKILL.md'), future, future)
 
+	// Second deploy
 	const second = await run_deploy(skill_dir)
+
 	assert.strictEqual(second.code, 0)
 })
