@@ -5,6 +5,31 @@ A set of tools (in the form of a Node.js CLI script) for managing
 agent skills: format conversion, comment stripping, linting,
 deployment.  Currently in WiP/PoC stage.
 
+* TODO Improve `strip_html_comments` test coverage
+Add missing test cases identified by static analysis against the
+CommonMark spec.
+
+** Steps [/]
+- [ ] Fence opener with info string (e.g. =```js=) opens a fence; comment on next line is preserved
+- [ ] Closer with fewer backticks than opener does not close the fence; comment is preserved
+- [ ] Mixed fence types: backtick closer does not close a tilde fence; comment is preserved
+- [ ] Unclosed comment at end of input is stripped without error
+- [ ] Comment-only line with surrounding whitespace is dropped
+- [ ] Three or more consecutive comments on one line: line is dropped
+- [ ] =--= inside a comment does not prematurely close it
+- [ ] Empty comment (=<!-- -->=) is stripped
+- [ ] Fence opened while inside an unclosed comment: interaction of the two states
+** Decisions
+** Session log
+
+* TODO Improve Markdown parsing
+Add support for possible edge cases in Markdown, using the CommonMark
+spec as the reference.  Consider using an existing Markdown parser.
+
+** Steps [/]
+** Decisions
+** Session log
+
 * TODO `strip` subcommand
 Print the stripped (comment-free) content of `SKILL.source.md` to stdout
 for inspection without deploying.
@@ -272,9 +297,9 @@ Clean: no output.
 Strip HTML comments from `SKILL.source.md` (and other `*.source.md` files)
 to produce the deployable skill content.
 
-** Steps [/]
-- [ ] Implement built-in HTML comment stripper (fenced-code-block-aware, string → string)
-- [ ] Add tests for the comment stripper function
+** Steps [2/7]
+- [X] Implement built-in HTML comment stripper (fenced-code-block-aware, string → string)
+- [X] Add tests for the comment stripper function
 - [ ] Update `init` to create `SKILL.source.md` by default; add `--no-comments` flag to create `SKILL.md` instead
 - [ ] Add an example HTML comment (explicitly delimited for removal) to `SKILL.template.md`
 - [ ] Implement `--no-comments` path: strip example block from template before writing `SKILL.md`

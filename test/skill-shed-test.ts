@@ -9,6 +9,7 @@ import {mkdtemp, writeFile, readFile, readdir, utimes} from 'node:fs/promises'
 import {tmpdir, homedir} from 'node:os'
 import {join, resolve, dirname, basename} from 'node:path'
 import {fileURLToPath} from 'node:url'
+import {strip_html_comments} from '../strip-html-comments.ts'
 
 const exec_file = promisify(execFile)
 const script = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'skill-shed.ts')
@@ -233,4 +234,129 @@ test('deploy: mtime guard allows deploy when source is newer', async () => {
 	const second = await run_deploy(skill_dir)
 
 	assert.strictEqual(second.code, 0)
+})
+
+// ** strip_html_comments
+
+test('strip_html_comments: empty input unchanged', () => {
+	assert.strictEqual(strip_html_comments(''), '')
+})
+
+test('strip_html_comments: no comments → unchanged', () => {
+	const input = [
+		'# Heading',
+		'',
+		'Some text.',
+		'',
+	].join('\n')
+	assert.strictEqual(strip_html_comments(input), input)
+})
+
+test('strip_html_comments: inline comment removed', () => {
+	assert.strictEqual(
+		strip_html_comments([
+			'before <!-- note --> after',
+			'',
+		].join('\n')),
+		[
+			'before  after',
+			'',
+		].join('\n'),
+	)
+})
+
+test('strip_html_comments: full-line comment dropped', () => {
+	assert.strictEqual(
+		strip_html_comments([
+			'line one',
+			'<!-- comment -->',
+			'line two',
+			'',
+		].join('\n')),
+		[
+			'line one',
+			'line two',
+			'',
+		].join('\n'),
+	)
+})
+
+test('strip_html_comments: multiline comment dropped', () => {
+	assert.strictEqual(
+		strip_html_comments([
+			'before',
+			'<!-- start',
+			'middle',
+			'end -->',
+			'after',
+			'',
+		].join('\n')),
+		[
+			'before',
+			'after',
+			'',
+		].join('\n'),
+	)
+})
+
+test('strip_html_comments: comment inside fenced code block preserved', () => {
+	const input = [
+		'```',
+		'<!-- not stripped -->',
+		'```',
+		'',
+	].join('\n')
+	assert.strictEqual(strip_html_comments(input), input)
+})
+
+test('strip_html_comments: comment inside tilde-fenced block preserved', () => {
+	const input = [
+		'~~~',
+		'<!-- not stripped -->',
+		'~~~',
+		'',
+	].join('\n')
+	assert.strictEqual(strip_html_comments(input), input)
+})
+
+test('strip_html_comments: multiline comment inside fenced block preserved', () => {
+	const input = [
+		'```',
+		'<!-- not',
+		'stripped -->',
+		'```',
+		'',
+	].join('\n')
+	assert.strictEqual(strip_html_comments(input), input)
+})
+
+test('strip_html_comments: multiple comments on one line', () => {
+	assert.strictEqual(
+		strip_html_comments([
+			'a <!-- x --> b <!-- y --> c',
+			'',
+		].join('\n')),
+		[
+			'a  b  c',
+			'',
+		].join('\n'),
+	)
+})
+
+test('strip_html_comments: comment starts mid-line, spans multiple lines, text follows closing', () => {
+	assert.strictEqual(
+		strip_html_comments([
+			'a <!-- x',
+			'y',
+			'z --> b',
+			'c',
+			'',
+		].join('\n')),
+		[
+			'a ',
+			' b',
+			'c',
+			'',
+		].join('\n'),
+	)
 })
