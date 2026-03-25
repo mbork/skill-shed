@@ -5,6 +5,43 @@ A set of tools (in the form of a Node.js CLI script) for managing
 agent skills: format conversion, comment stripping, linting,
 deployment.  Currently in WiP/PoC stage.
 
+* TODO `strip` subcommand
+Print the stripped (comment-free) content of `SKILL.source.md` to stdout
+for inspection without deploying.
+
+** Steps [/]
+- [ ] Implement `strip` subcommand: run comment stripping on `SKILL.source.md` and print to stdout
+- [ ] Add tests for `strip` output
+** Decisions
+*** [2026-03-25] – `strip` as a dedicated subcommand, not `--dry-run` on `deploy`
+**** Reason
+Printing stripped content to stdout is a different operation from simulating a deploy.
+Unix convention: `--dry-run` means "simulate the full operation without side effects"
+(show what would be copied where).  Dumping Markdown to stdout is content inspection,
+not operation simulation — a separate subcommand is unambiguous, independently testable,
+and composable with other tools (pagers, diff, etc.).
+**** Alternatives considered
+- `deploy --dry-run` printing stripped content: semantic mismatch with Unix convention;
+  surprises users familiar with rsync/make/ansible `--dry-run`.
+** Session log
+
+* TODO `deploy --dry-run`
+Simulate a deploy (show what would be copied where) without writing any files.
+
+** Steps [/]
+- [ ] Add `--dry-run` flag to `deploy`: print planned copy operations to stdout, no writes
+- [ ] Add tests for `--dry-run` output
+** Decisions
+*** [2026-03-25] – `deploy --dry-run` reserved for operation simulation, not content inspection
+**** Reason
+Conventional meaning: show what the deploy would do (source → target paths, files that
+would be created/overwritten) without side effects.  Becomes significantly more useful
+once multi-file deploy is implemented.  Keeping the semantics correct now avoids
+a confusing rename later.
+**** Alternatives considered
+- `--dry-run` printing stripped content: rejected — that is the job of the `strip` subcommand.
+** Session log
+
 * BLOCKED Emacs batch mode converter for Org → md
 Support using Emacs in batch mode as an alternative to pandoc for
 converting `*.source.org` files to `.md`.
