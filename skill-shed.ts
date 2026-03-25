@@ -1,8 +1,9 @@
 #!/usr/bin/env -S node --experimental-strip-types
 
 // * Imports
-import {stat, copyFile, mkdir} from 'node:fs/promises'
-import {resolve} from 'node:path'
+import {stat, copyFile, mkdir, readFile, writeFile} from 'node:fs/promises'
+import {resolve, basename} from 'node:path'
+import {homedir} from 'node:os'
 import {parseArgs} from 'node:util'
 import {config as dotenv_config} from 'dotenv'
 
@@ -16,7 +17,7 @@ const [command, skill_dir_arg] = positionals
 
 if (!command) {
 	console.error('Usage: skill-shed <command> [skill-dir]')
-	console.error('Commands: deploy')
+	console.error('Commands: init, deploy')
 	process.exit(1)
 }
 
@@ -25,11 +26,55 @@ const skill_dir = skill_dir_arg ? resolve(skill_dir_arg) : process.cwd()
 // * Commands
 
 // ** dispatch
-if (command === 'deploy') {
+if (command === 'init') {
+	await init(skill_dir, positionals[2])
+} else if (command === 'deploy') {
 	await deploy(skill_dir)
 } else {
 	console.error(`Unknown command: ${command}`)
 	process.exit(1)
+}
+
+// ** init
+async function init(skill_dir: string, deploy_dir_arg?: string): Promise<void> {
+	const skill_name = basename(skill_dir)
+	const deploy_dir = deploy_dir_arg
+		? resolve(deploy_dir_arg)
+		: resolve(homedir(), '.claude', 'skills', skill_name)
+	const env_path = resolve(skill_dir, '.env')
+
+	// Here the logic of `try ... catch ...` is reversed compared to the usual case: file existing
+	// is an error condition.
+	try {
+		await stat(env_path)
+		console.error(`Error: .env already exists in ${skill_dir}`)
+		process.exit(1)
+	} catch (e: unknown) {
+		if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e
+	}
+
+	await mkdir(skill_dir, {recursive: true})
+	await writeFile(env_path, `TARGET_DIRECTORY=${deploy_dir}\n`)
+
+	const skill_md_path = resolve(skill_dir, 'SKILL.md')
+	let skill_md_exists = false
+	try {
+		await stat(skill_md_path)
+		skill_md_exists = true
+	} catch (e: unknown) {
+		if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e
+	}
+	if (!skill_md_exists) {
+		const template_path = resolve(import.meta.dirname, 'SKILL.template.md')
+		const template = await readFile(template_path, 'utf8')
+		const skill_md = template
+			.replace('{{name}}', skill_name)
+			.replace('{{Name}}', skill_name.charAt(0).toUpperCase() + skill_name.slice(1))
+		await writeFile(skill_md_path, skill_md)
+	}
+
+	console.log(`Initialized ${skill_dir}`)
+	console.log(`TARGET_DIRECTORY=${deploy_dir}`)
 }
 
 // ** deploy

@@ -232,6 +232,34 @@ alternative source formats, so no new dependency for mixed workflows.
 - In-script Markdown parser: significant dependency, no advantage over pandoc.
 ** Session log
 
+* DONE Initialize new skill directory
+:LOGBOOK:
+- State "DONE"       from "INPROGRESS" [2026-03-25 Wed 05:57]
+:END:
+Add an `init` command that sets up a new skill directory with a
+skeleton `.env` config.
+
+** Steps [4/4]
+- [X] Implement `init` command: create skill dir if absent, write `.env` with `TARGET_DIRECTORY`
+- [X] Create empty ~SKILL.md~ with a template if absent
+- [X] Abort with error if `.env` already exists in the target dir
+- [X] Accept optional second positional arg for the deploy dir (default: `~/.claude/skills/<skill-name>`)
+** Decisions
+*** [2026-03-24] – Template file named `SKILL.template.md`; `{{Name}}` is first-letter-only capitalization
+**** Reason
+`SKILL.template.md` mirrors the `SKILL.md` naming convention.  Capitalizing only the first letter
+of `skill_name` is simpler than full title-casing and sufficient for a heading placeholder.
+**** Alternatives considered
+- `skill-template.md`: rejected in favour of convention-matching name.
+- Title-case all dash-separated words: more complex, not needed.
+** Session log
+*** [2026-03-24]
+- Completed: `init` command in `skill-shed.ts` (creates dir + `.env` + `SKILL.md` from `SKILL.template.md`); 6 tests in `test/skill-shed-test.ts`; dispatch reordered (init before deploy)
+- In progress: tests written but not yet run
+- Next: run tests, then audit for missing/duplicate test cases
+- Blockers: NONE
+- Decisions: template filename, `{{Name}}` capitalization strategy (logged above)
+
 * DONE Skill deployment
 :LOGBOOK:
 - State "DONE"       from "INPROGRESS" [2026-03-24 Tue 12:22]
