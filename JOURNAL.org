@@ -290,14 +290,15 @@ separately list files in HEAD deleted from working tree (skipped).
 Clean: no output.
 ** Session log
 
-* INPROGRESS Skill comment stripping
+* DONE Skill comment stripping
 :LOGBOOK:
+- State "DONE"       from "INPROGRESS" [2026-03-25 Wed 16:07]
 - State "INPROGRESS" from "TODO"       [2026-03-25 Wed 08:26]
 :END:
 Strip HTML comments from `SKILL.source.md` (and other `*.source.md` files)
 to produce the deployable skill content.
 
-** Steps [7/8]
+** Steps [8/8]
 - [X] Implement built-in HTML comment stripper (fenced-code-block-aware, string → string)
 - [X] Add tests for the comment stripper function
 - [X] Make `--comments` and `--no-comments` mutually exclusive
@@ -305,7 +306,7 @@ to produce the deployable skill content.
 - [X] Add an example HTML comment (explicitly delimited for removal) to `SKILL.template.md`
 - [X] Implement `--no-comments` path: strip example block from template before writing `SKILL.md`
 - [X] Add tests for both `init` paths (default and `--no-comments`)
-- [ ] Integrate stripping step into deploy command (in-memory, no intermediate file)
+- [X] Integrate stripping step into deploy command (in-memory, no intermediate file)
 ** Decisions
 *** [2026-03-25] – Stay with `node:util`'s `parseArgs` for CLI argument handling (no library)
 **** Reason
@@ -402,6 +403,17 @@ alternative source formats, so no new dependency for mixed workflows.
 - In-script regex: incorrect for comments inside code blocks.
 - In-script Markdown parser: significant dependency, no advantage over pandoc.
 ** Session log
+*** [2026-03-25] (session 3)
+- Completed: steps 5–8 — HTML comment added to `SKILL.template.md`; `init` strips it
+  when writing `SKILL.md`; blank-line collapsing added to `strip_html_comments`; `deploy`
+  detects `SKILL.source.md` vs `SKILL.md`, strips in-memory, uses `readFile`/`writeFile`
+  for both paths; 3 new deploy tests; `tsconfig.json` lib bumped to ES2025
+- In progress: NONE — all 8 steps done, feature DONE
+- Next: pick up next feature (e.g. `strip` subcommand or `deploy --dry-run`)
+- Blockers: NONE
+- Decisions: don't generalize single-file deploy with `readdir`+`target_filename`
+  (multi-file will use `git ls-files` anyway — intermediate generalization would be thrown
+  away)
 *** [2026-03-25] (session 2)
 - Completed: steps 3 & 4 — `--comments`/`--no-comments` flags with mutual exclusion in
   `skill-shed.ts`; `init()` creates `SKILL.source.md` by default or `SKILL.md` with
