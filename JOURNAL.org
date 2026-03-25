@@ -280,6 +280,14 @@ of `skill_name` is simpler than full title-casing and sufficient for a heading p
 - `skill-template.md`: rejected in favour of convention-matching name.
 - Title-case all dash-separated words: more complex, not needed.
 ** Session log
+*** [2026-03-25]
+- Completed: removed duplicate test; added assertions for `description`, indented body,
+  `allowed-tools`, `# My-skill skill`, stdout, empty stdout on abort, and file listing
+  on abort; added blank lines between setup/assertion phases (all in `test/skill-shed-test.ts`)
+- In progress: N/A — all steps done, tests solid
+- Next: mark feature DONE, then pick up "Improve and test the CLI UI"
+- Blockers: NONE
+- Decisions: merged duplicate template-content test into the main creation test to avoid redundancy
 *** [2026-03-24]
 - Completed: `init` command in `skill-shed.ts` (creates dir + `.env` + `SKILL.md` from `SKILL.template.md`); 6 tests in `test/skill-shed-test.ts`; dispatch reordered (init before deploy)
 - In progress: tests written but not yet run
