@@ -7,33 +7,36 @@ import {homedir} from 'node:os'
 import {parseArgs} from 'node:util'
 import {config as dotenv_config} from 'dotenv'
 
-// * CLI parsing
-const {positionals} = parseArgs({
-	args: process.argv.slice(2),
-	allowPositionals: true,
-})
-
-const [command, skill_dir_arg] = positionals
-
-if (!command) {
-	console.error('Usage: skill-shed <command> [skill-dir]')
-	console.error('Commands: init, deploy')
-	process.exit(1)
-}
-
-const skill_dir = skill_dir_arg ? resolve(skill_dir_arg) : process.cwd()
-
 // * Commands
 
-// ** dispatch
-if (command === 'init') {
-	await init(skill_dir, positionals[2])
-} else if (command === 'deploy') {
-	await deploy(skill_dir)
-} else {
-	console.error(`Unknown command: ${command}`)
-	process.exit(1)
+// ** main
+async function main(): Promise<void> {
+	const {positionals} = parseArgs({
+		args: process.argv.slice(2),
+		allowPositionals: true,
+	})
+
+	const [command, skill_dir_arg] = positionals
+
+	if (!command) {
+		console.error('Usage: skill-shed <command> [skill-dir]')
+		console.error('Commands: init, deploy')
+		process.exit(1)
+	}
+
+	const skill_dir = skill_dir_arg ? resolve(skill_dir_arg) : process.cwd()
+
+	if (command === 'init') {
+		await init(skill_dir, positionals[2])
+	} else if (command === 'deploy') {
+		await deploy(skill_dir)
+	} else {
+		console.error(`Unknown command: ${command}`)
+		process.exit(1)
+	}
 }
+
+if (import.meta.main) await main()
 
 // ** init
 async function init(skill_dir: string, deploy_dir_arg?: string): Promise<void> {
