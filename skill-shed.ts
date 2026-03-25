@@ -7,6 +7,18 @@ import {homedir} from 'node:os'
 import {parseArgs} from 'node:util'
 import {config as dotenv_config} from 'dotenv'
 
+// * Utilities
+
+// ** target_filename
+const SOURCE_SUFFIXES = ['.source.md']
+
+// Build one regex matching any known suffix at end-of-string, e.g. /(?:\.source\.md)$/
+const SOURCE_SUFFIX_RE = new RegExp(`(?:${SOURCE_SUFFIXES.map(s => RegExp.escape(s)).join('|')})$`)
+
+export function target_filename(source: string): string {
+	return source.replace(SOURCE_SUFFIX_RE, '.md')
+}
+
 // * Commands
 
 // ** main

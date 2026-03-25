@@ -10,6 +10,7 @@ import {tmpdir, homedir} from 'node:os'
 import {join, resolve, dirname, basename} from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {strip_html_comments} from '../strip-html-comments.ts'
+import {target_filename} from '../skill-shed.ts'
 
 const exec_file = promisify(execFile)
 const script = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'skill-shed.ts')
@@ -359,4 +360,22 @@ test('strip_html_comments: comment starts mid-line, spans multiple lines, text f
 			'',
 		].join('\n'),
 	)
+})
+
+// ** target_filename
+
+test('target_filename: .md unchanged', () => {
+	assert.strictEqual(target_filename('SKILL.md'), 'SKILL.md')
+})
+
+test('target_filename: .source.md → .md', () => {
+	assert.strictEqual(target_filename('SKILL.source.md'), 'SKILL.md')
+})
+
+test('target_filename: non-md extension unchanged', () => {
+	assert.strictEqual(target_filename('template.html'), 'template.html')
+})
+
+test('target_filename: no extension unchanged', () => {
+	assert.strictEqual(target_filename('LICENSE'), 'LICENSE')
 })
