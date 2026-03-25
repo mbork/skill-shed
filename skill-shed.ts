@@ -1,7 +1,7 @@
 #!/usr/bin/env -S node --experimental-strip-types
 
 // * Imports
-import {copyFile, mkdir, readFile, readdir, stat, writeFile} from 'node:fs/promises'
+import {mkdir, readFile, readdir, stat, writeFile} from 'node:fs/promises'
 import {resolve, basename} from 'node:path'
 import {homedir} from 'node:os'
 import {parseArgs} from 'node:util'
@@ -135,7 +135,6 @@ async function init(skill_dir: string, deploy_dir_arg?: string, comments_mode: b
 // ** deploy
 async function deploy(skill_dir: string): Promise<void> {
 	const env_path = resolve(skill_dir, '.env')
-	const skill_md_path = resolve(skill_dir, 'SKILL.md')
 
 	const env_result = dotenv_config({path: env_path})
 	if (env_result.error) {
@@ -154,6 +153,32 @@ async function deploy(skill_dir: string): Promise<void> {
 		process.exit(1)
 	}
 
+	// NOTE: Single-file deploy only.  Multi-file deploy will replace this
+	// with a git-ls-files-based manifest and iterate over all source files.
+	const skill_source_md_path = resolve(skill_dir, 'SKILL.source.md')
+	const skill_md_path = resolve(skill_dir, 'SKILL.md')
+
+	const existing = new Set(await readdir(skill_dir))
+	const is_source_md_present = existing.has('SKILL.source.md')
+	const is_md_present = existing.has('SKILL.md')
+
+	let source_path: string
+	let should_strip_comments: boolean
+
+	if (is_source_md_present && is_md_present) {
+		console.error(`Error: both SKILL.source.md and SKILL.md found in ${skill_dir}`)
+		process.exit(1)
+	} else if (is_source_md_present) {
+		source_path = skill_source_md_path
+		should_strip_comments = true
+	} else if (is_md_present) {
+		source_path = skill_md_path
+		should_strip_comments = false
+	} else {
+		console.error(`Error: no SKILL.md or SKILL.source.md found in ${skill_dir}`)
+		process.exit(1)
+	}
+
 	const target_path = resolve(skill_dir, target_dir, 'SKILL.md')
 
 	let target_mtime: number | null = null
@@ -166,10 +191,10 @@ async function deploy(skill_dir: string): Promise<void> {
 	}
 
 	if (target_mtime !== null) {
-		const source_mtime = (await stat(skill_md_path)).mtimeMs
+		const source_mtime = (await stat(source_path)).mtimeMs
 		if (target_mtime > source_mtime) {
 			console.error(
-				`Error: target ${target_path} is newer than source ${skill_md_path}.\n`
+				`Error: target ${target_path} is newer than source ${source_path}.\n`
 				+ `Target may have been edited directly. Aborting.`,
 			)
 			process.exit(1)
@@ -177,6 +202,10 @@ async function deploy(skill_dir: string): Promise<void> {
 	}
 
 	await mkdir(resolve(skill_dir, target_dir), {recursive: true})
-	await copyFile(skill_md_path, target_path)
-	console.log(`Deployed: ${skill_md_path} -> ${target_path}`)
+	let content = await readFile(source_path, 'utf8')
+	if (should_strip_comments) {
+		content = strip_html_comments(content)
+	}
+	await writeFile(target_path, content)
+	console.log(`Deployed: ${source_path} -> ${target_path}`)
 }

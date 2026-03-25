@@ -365,7 +365,7 @@ test('deploy: missing TARGET_DIRECTORY in .env', async () => {
 	assert.match(result.stderr, /TARGET_DIRECTORY not set/)
 })
 
-test('deploy: missing SKILL.md', async () => {
+test('deploy: missing SKILL.md and SKILL.source.md', async () => {
 	const skill_dir = await make_tmp_dir()
 	const target_dir = await make_tmp_dir()
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
@@ -373,6 +373,36 @@ test('deploy: missing SKILL.md', async () => {
 	const result = await run_deploy(skill_dir)
 
 	assert.strictEqual(result.code, 1)
+	assert.match(result.stderr, /no SKILL\.md or SKILL\.source\.md found/)
+})
+
+test('deploy: both SKILL.md and SKILL.source.md aborts', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), '# skill\n')
+	await writeFile(join(skill_dir, 'SKILL.source.md'), '# skill\n')
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+
+	const result = await run_deploy(skill_dir)
+
+	assert.strictEqual(result.code, 1)
+	assert.match(result.stderr, /both SKILL\.source\.md and SKILL\.md found/)
+})
+
+test('deploy: SKILL.source.md is stripped and deployed as SKILL.md', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	await writeFile(
+		join(skill_dir, 'SKILL.source.md'),
+		'# My skill\n\n<!-- a comment -->\n\nSome text.\n',
+	)
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+
+	const result = await run_deploy(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	const deployed = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
+	assert.strictEqual(deployed, '# My skill\n\nSome text.\n')
 })
 
 test('deploy: target directory is created if missing', async () => {
