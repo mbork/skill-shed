@@ -68,7 +68,6 @@ const MY_SKILL_SOURCE_CONTENT = [
 	'# My-skill skill',
 ].join('\n')
 
-// Two blank lines because the comment block (between the two blank lines) is stripped
 const MY_SKILL_CONTENT = [
 	'---',
 	'name: my-skill',
@@ -78,7 +77,6 @@ const MY_SKILL_CONTENT = [
 	'  mentions something?  Uploads a file of specific type?',
 	'allowed-tools: Read, Bash(rg *)',
 	'---',
-	'',
 	'',
 	'# My-skill skill',
 ].join('\n')
@@ -486,6 +484,46 @@ test('strip_html_comments: full-line comment dropped', () => {
 		].join('\n')),
 		[
 			'line one',
+			'line two',
+			'',
+		].join('\n'),
+	)
+})
+
+test('strip_html_comments: comment between blank lines collapses to one blank line', () => {
+	assert.strictEqual(
+		strip_html_comments([
+			'line one',
+			'',
+			'<!-- comment -->',
+			'',
+			'line two',
+			'',
+		].join('\n')),
+		[
+			'line one',
+			'',
+			'line two',
+			'',
+		].join('\n'),
+	)
+})
+
+test('strip_html_comments: multiple blank lines before comment are preserved', () => {
+	assert.strictEqual(
+		strip_html_comments([
+			'line one',
+			'',
+			'',
+			'<!-- comment -->',
+			'',
+			'line two',
+			'',
+		].join('\n')),
+		[
+			'line one',
+			'',
+			'',
 			'line two',
 			'',
 		].join('\n'),

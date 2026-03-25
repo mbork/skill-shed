@@ -7,6 +7,8 @@ export function strip_html_comments(content: string): string {
 	let fence_char = ''
 	let fence_min_length = 0
 	let is_in_comment = false
+	let was_last_pushed_blank = false
+	let was_comment_stripped = false
 	const result: string[] = []
 
 	for (const line of lines) {
@@ -16,6 +18,8 @@ export function strip_html_comments(content: string): string {
 				is_in_fence = false
 			}
 			result.push(line)
+			was_last_pushed_blank = line.trim() === ''
+			was_comment_stripped = false
 			continue
 		}
 
@@ -26,6 +30,8 @@ export function strip_html_comments(content: string): string {
 			fence_char = fence_match[1][0]
 			fence_min_length = fence_match[1].length
 			result.push(line)
+			was_last_pushed_blank = false
+			was_comment_stripped = false
 			continue
 		}
 
@@ -56,9 +62,20 @@ export function strip_html_comments(content: string): string {
 
 		// Drop lines that were entirely consumed by comments
 		if (out.trim() === '' && line.trim() !== '') {
+			was_comment_stripped = true
 			continue
 		}
+
+		// Suppress blank line that immediately follows a stripped comment block
+		// when the line before the block was also blank
+		if (out.trim() === '' && was_last_pushed_blank && was_comment_stripped) {
+			was_comment_stripped = false
+			continue
+		}
+
 		result.push(out)
+		was_last_pushed_blank = out.trim() === ''
+		was_comment_stripped = false
 	}
 
 	return result.join('\n')
