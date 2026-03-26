@@ -45,12 +45,15 @@ export function find_target_conflicts(names: string[]): string[][] {
 }
 
 // * validate_manifest
-// Throws if any two entries share the same target_name, listing all conflicts.
+// Throws if any two entries share the same target_name, or if no entry targets SKILL.md.
 export function validate_manifest(manifest: Manifest): void {
 	const conflicts = find_target_conflicts(manifest.map(e => e.source_name))
 	if (conflicts.length > 0) {
 		const conflict_list = conflicts.map(group => group.join(', ')).join('; ')
 		throw new Error(`Conflicting files: ${conflict_list}`)
+	}
+	if (!manifest.some(e => e.target_name === 'SKILL.md')) {
+		throw new Error('No entry targets SKILL.md')
 	}
 }
 

@@ -144,11 +144,6 @@ async function deploy(skill_dir: string): Promise<void> {
 		process.exit(1)
 	}
 
-	if (manifest.length === 0) {
-		console.error(`Error: no deployable files found in ${skill_dir}`)
-		process.exit(1)
-	}
-
 	await mkdir(resolve(skill_dir, target_dir), {recursive: true})
 	for (const entry of manifest) {
 		const source_path = resolve(skill_dir, entry.source_name)

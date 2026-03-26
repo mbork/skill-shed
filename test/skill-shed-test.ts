@@ -373,7 +373,7 @@ test('deploy: missing SKILL.md and SKILL.source.md', async () => {
 	const result = await run_deploy(skill_dir)
 
 	assert.strictEqual(result.code, 1)
-	assert.match(result.stderr, /no deployable files found/)
+	assert.strictEqual(result.stderr.trim(), 'Error: No entry targets SKILL.md')
 })
 
 test('deploy: both SKILL.md and SKILL.source.md aborts', async () => {
@@ -788,6 +788,14 @@ test('validate_manifest: throws listing all conflicting source names', () => {
 	assert.throws(() => validate_manifest(manifest), new Error('Conflicting files: SKILL.source.md, SKILL.md'))
 })
 
-test('validate_manifest: passes on empty manifest', () => {
-	assert.doesNotThrow(() => validate_manifest([]))
+test('validate_manifest: throws when no SKILL.md target present', () => {
+	const manifest = [
+		{source_name: 'extra.md', target_name: 'extra.md', source_content: '', target_content: ''},
+	]
+
+	assert.throws(() => validate_manifest(manifest), new Error('No entry targets SKILL.md'))
+})
+
+test('validate_manifest: throws on empty manifest', () => {
+	assert.throws(() => validate_manifest([]), new Error('No entry targets SKILL.md'))
 })
