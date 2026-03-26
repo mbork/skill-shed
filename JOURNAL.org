@@ -438,6 +438,16 @@ into one of two cases, distinguishable via the sidecar:
   harder to reason about.
 - Ignore unowned files: silently accumulates cruft.
 ** Session log
+*** [2026-03-26]
+- Completed: steps 1–2 — ~manifest.ts~ with ~ManifestEntry[]~ type, ~build_manifest_from_dir~,
+  ~find_target_conflicts~, ~validate_manifest~ (incl. SKILL.md target check); ~deploy~ rewritten
+  to use manifest (multi-file, mtime guard removed); ~target_filename~ moved to ~manifest.ts~;
+  code-dup between ~init~ and ~validate_manifest~ eliminated; 6 commits
+- In progress: NONE
+- Next: implement sidecar read/write and per-file overwrite check (step 3)
+- Blockers: NONE
+- Decisions: all logged above (MVP via ~build_manifest_from_dir~; ~ManifestEntry~ shape;
+  array not Map; extension-based text/Buffer storage; ~find_target_conflicts~ as shared helper)
 *** [2026-03-25]
 - Completed: design only — four decisions logged (mtime → content-hash sidecar;
   sidecar in target dir; per-file overwrite check logic; stale-file policy)
