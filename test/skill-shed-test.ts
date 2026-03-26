@@ -5,7 +5,7 @@ import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {execFile} from 'node:child_process'
 import {promisify} from 'node:util'
-import {mkdtemp, writeFile, readFile, readdir, utimes} from 'node:fs/promises'
+import {mkdtemp, writeFile, readFile, readdir} from 'node:fs/promises'
 import {tmpdir, homedir} from 'node:os'
 import {join, resolve, dirname, basename} from 'node:path'
 import {fileURLToPath} from 'node:url'
@@ -373,7 +373,7 @@ test('deploy: missing SKILL.md and SKILL.source.md', async () => {
 	const result = await run_deploy(skill_dir)
 
 	assert.strictEqual(result.code, 1)
-	assert.match(result.stderr, /no SKILL\.md or SKILL\.source\.md found/)
+	assert.match(result.stderr, /no deployable files found/)
 })
 
 test('deploy: both SKILL.md and SKILL.source.md aborts', async () => {
@@ -386,7 +386,7 @@ test('deploy: both SKILL.md and SKILL.source.md aborts', async () => {
 	const result = await run_deploy(skill_dir)
 
 	assert.strictEqual(result.code, 1)
-	assert.match(result.stderr, /both SKILL\.source\.md and SKILL\.md found/)
+	assert.strictEqual(result.stderr.trim(), 'Error: Conflicting files: SKILL.md, SKILL.source.md')
 })
 
 test('deploy: SKILL.source.md is stripped and deployed as SKILL.md', async () => {
@@ -432,47 +432,39 @@ test('deploy: successful deploy', async () => {
 	assert.strictEqual(deployed, content)
 })
 
-test('deploy: mtime guard aborts when target is newer', async () => {
+test('deploy: multi-file skill deploys all non-dotfiles', async () => {
 	const skill_dir = await make_tmp_dir()
 	const target_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), '# My skill\n')
+	await writeFile(join(skill_dir, 'SKILL.source.md'), '# My skill\n<!-- comment -->\nContent.\n')
+	await writeFile(join(skill_dir, 'reference.md'), '# Reference\nSome reference.\n')
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+	await writeFile(join(skill_dir, '.gitignore'), '*.log\n')
 
-	// First deploy
-	const first = await run_deploy(skill_dir)
+	const result = await run_deploy(skill_dir)
 
-	assert.strictEqual(first.code, 0)
-
-	// Make target appear newer than source
-	const future = new Date(Date.now() + 60_000)
-	await utimes(join(target_dir, 'SKILL.md'), future, future)
-
-	// Second deploy
-	const second = await run_deploy(skill_dir)
-
-	assert.strictEqual(second.code, 1)
-	assert.match(second.stderr, /is newer than source/)
+	assert.strictEqual(result.code, 0)
+	const deployed_skill = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
+	assert.strictEqual(deployed_skill, '# My skill\nContent.\n')
+	const deployed_reference = await readFile(join(target_dir, 'reference.md'), 'utf8')
+	assert.strictEqual(deployed_reference, '# Reference\nSome reference.\n')
+	const target_files = await readdir(target_dir)
+	assert.deepStrictEqual(target_files.sort(), ['SKILL.md', 'reference.md'])
 })
 
-test('deploy: mtime guard allows deploy when source is newer', async () => {
+test('deploy: only .source.md files have comments stripped', async () => {
 	const skill_dir = await make_tmp_dir()
 	const target_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), '# My skill\n')
+	await writeFile(join(skill_dir, 'SKILL.source.md'), 'A\n<!-- strip me -->\nB\n')
+	await writeFile(join(skill_dir, 'extra.md'), 'C\n<!-- keep me -->\nD\n')
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 
-	// First deploy
-	const first = await run_deploy(skill_dir)
+	const result = await run_deploy(skill_dir)
 
-	assert.strictEqual(first.code, 0)
-
-	// Make source appear newer than target
-	const future = new Date(Date.now() + 60_000)
-	await utimes(join(skill_dir, 'SKILL.md'), future, future)
-
-	// Second deploy
-	const second = await run_deploy(skill_dir)
-
-	assert.strictEqual(second.code, 0)
+	assert.strictEqual(result.code, 0)
+	const deployed_skill = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
+	assert.strictEqual(deployed_skill, 'A\nB\n')
+	const deployed_extra = await readFile(join(target_dir, 'extra.md'), 'utf8')
+	assert.strictEqual(deployed_extra, 'C\n<!-- keep me -->\nD\n')
 })
 
 // ** strip_html_comments

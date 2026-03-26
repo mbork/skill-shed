@@ -1,13 +1,13 @@
 #!/usr/bin/env -S node --experimental-strip-types
 
 // * Imports
-import {mkdir, readFile, readdir, stat, writeFile} from 'node:fs/promises'
+import {mkdir, readFile, readdir, writeFile} from 'node:fs/promises'
 import {resolve, basename} from 'node:path'
 import {homedir} from 'node:os'
 import {parseArgs} from 'node:util'
 import {config as dotenv_config} from 'dotenv'
 import {strip_html_comments} from './strip-html-comments.ts'
-import {find_target_conflicts} from './manifest.ts'
+import {find_target_conflicts, build_manifest_from_dir, validate_manifest} from './manifest.ts'
 
 // * Commands
 
@@ -135,59 +135,25 @@ async function deploy(skill_dir: string): Promise<void> {
 		process.exit(1)
 	}
 
-	// NOTE: Single-file deploy only.  Multi-file deploy will replace this
-	// with a git-ls-files-based manifest and iterate over all source files.
-	const skill_source_md_path = resolve(skill_dir, 'SKILL.source.md')
-	const skill_md_path = resolve(skill_dir, 'SKILL.md')
+	const manifest = await build_manifest_from_dir(skill_dir)
 
-	const existing = new Set(await readdir(skill_dir))
-	const is_source_md_present = existing.has('SKILL.source.md')
-	const is_md_present = existing.has('SKILL.md')
-
-	let source_path: string
-	let should_strip_comments: boolean
-
-	if (is_source_md_present && is_md_present) {
-		console.error(`Error: both SKILL.source.md and SKILL.md found in ${skill_dir}`)
-		process.exit(1)
-	} else if (is_source_md_present) {
-		source_path = skill_source_md_path
-		should_strip_comments = true
-	} else if (is_md_present) {
-		source_path = skill_md_path
-		should_strip_comments = false
-	} else {
-		console.error(`Error: no SKILL.md or SKILL.source.md found in ${skill_dir}`)
-		process.exit(1)
-	}
-
-	const target_path = resolve(skill_dir, target_dir, 'SKILL.md')
-
-	let target_mtime: number | null = null
 	try {
-		target_mtime = (await stat(target_path)).mtimeMs
+		validate_manifest(manifest)
 	} catch (e: unknown) {
-		if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
-			throw e
-		}
+		console.error(`Error: ${(e as Error).message}`)
+		process.exit(1)
 	}
 
-	if (target_mtime !== null) {
-		const source_mtime = (await stat(source_path)).mtimeMs
-		if (target_mtime > source_mtime) {
-			console.error(
-				`Error: target ${target_path} is newer than source ${source_path}.\n`
-				+ `Target may have been edited directly. Aborting.`,
-			)
-			process.exit(1)
-		}
+	if (manifest.length === 0) {
+		console.error(`Error: no deployable files found in ${skill_dir}`)
+		process.exit(1)
 	}
 
 	await mkdir(resolve(skill_dir, target_dir), {recursive: true})
-	let content = await readFile(source_path, 'utf8')
-	if (should_strip_comments) {
-		content = strip_html_comments(content)
+	for (const entry of manifest) {
+		const source_path = resolve(skill_dir, entry.source_name)
+		const target_path = resolve(skill_dir, target_dir, entry.target_name)
+		await writeFile(target_path, entry.target_content)
+		console.log(`Deployed: ${source_path} -> ${target_path}`)
 	}
-	await writeFile(target_path, content)
-	console.log(`Deployed: ${source_path} -> ${target_path}`)
 }

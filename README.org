@@ -18,7 +18,10 @@ Initialize a skill directory:
 #+begin_src shell
   skill-shed init <skill-directory> [<deploy-directory>]
 #+end_src
-By default, skills will be deployed to =~/.claude/skills=.
+By default, skills will be deployed to =~/.claude/skills=.  This can
+be changed by editing ~.env~ in the skill directory and setting
+~TARGET_DIRECTORY~.  That directory is interpreted as relative to the
+skill directory.
 
 Deploy a skill:
 #+begin_src shell
