@@ -7,18 +7,7 @@ import {homedir} from 'node:os'
 import {parseArgs} from 'node:util'
 import {config as dotenv_config} from 'dotenv'
 import {strip_html_comments} from './strip-html-comments.ts'
-
-// * Utilities
-
-// ** target_filename
-const SOURCE_SUFFIXES = ['.source.md']
-
-// Build one regex matching any known suffix at end-of-string, e.g. /(?:\.source\.md)$/
-const SOURCE_SUFFIX_RE = new RegExp(`(?:${SOURCE_SUFFIXES.map(s => RegExp.escape(s)).join('|')})$`)
-
-export function target_filename(source: string): string {
-	return source.replace(SOURCE_SUFFIX_RE, '.md')
-}
+import {find_target_conflicts} from './manifest.ts'
 
 // * Commands
 
@@ -74,14 +63,7 @@ async function init(skill_dir: string, deploy_dir_arg?: string, comments_mode: b
 
 	const existing = new Set((await readdir(skill_dir)).sort())
 
-	const by_target = new Map<string, string[]>()
-	for (const file of existing) {
-		const target = target_filename(file)
-		const group = by_target.get(target) ?? []
-		group.push(file)
-		by_target.set(target, group)
-	}
-	const conflicts = [...by_target.values()].filter(group => group.length > 1)
+	const conflicts = find_target_conflicts([...existing])
 	if (conflicts.length > 0) {
 		const conflict_list = conflicts.map(group => group.join(', ')).join('; ')
 		console.error(`Error: conflicting files in ${skill_dir}: ${conflict_list}`)

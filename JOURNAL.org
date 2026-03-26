@@ -243,9 +243,9 @@ Support deploying skills that consist of more than one file.
 - [[*Skill deployment]]
 - [[*Skill comment stripping]]
 
-** Steps [1/11]
+** Steps [2/11]
 - [X] Implement ~build_manifest_from_dir~: ~readdir~ + dotfile filter, returns ~Map<string, Buffer|string>~
-- [ ] Implement `*.source.md` → `*.md` comment stripping for all files in the manifest
+- [X] Implement `*.source.md` → `*.md` comment stripping for all files in the manifest
 - [ ] Implement sidecar read/write and per-file overwrite check (absent/owned/unowned cases)
 - [ ] Decide and implement atomicity strategy on partial failure
 - [ ] Implement stale-file policy: delete owned files, abort on unowned files
@@ -256,6 +256,37 @@ Support deploying skills that consist of more than one file.
 - [ ] Implement DEPLOY_DOTFILES whitelist in .env
 - [ ] Check config consistency (DEPLOY_DOTFILES lists untracked file; MANIFEST_CMD command not on $PATH)
 ** Decisions
+*** [2026-03-26] – Manifest is an array of ManifestEntry objects, not a Map
+**** Reason
+Iteration is the dominant operation; lookup by name is rare and only needed
+for ~5–20 entries (skill files are small).  The conflict check
+(~SKILL.md~ vs ~SKILL.source.md~ both resolving to the same target) requires
+an explicit scan regardless of container — a ~Map~ keyed by target name would
+silently overwrite and still needs a pre-check.  Since the ~Map~ invariant
+doesn't help here, an array is the more honest representation: an ordered
+collection of records with no artificial primary key.  A ~validate_manifest~
+function checks for duplicate ~target_name~s explicitly, replacing the
+implicit (but non-functional) ~Map~ guarantee.
+**** Alternatives considered
+- ~Map<string, ManifestEntry>~ keyed by ~target_name~: doesn't enforce
+  uniqueness for the source-conflict case; O(1) lookup irrelevant at n ≤ 20.
+
+*** [2026-03-26] – ManifestEntry shape: source_name, target_name, source_content, target_content, line_map
+**** Reason
+All transform types (comment stripping, Org→md, AsciiDoc→md) produce a
+source and a target.  Storing both in one entry gives linting access to
+the source and deploy access to the target without reconstruction.
+~source_content~ is ~string | Buffer~ (string for ~.md~/~.source.md~,
+Buffer for ~.org~ etc.); ~target_content~ is always ~string~ (always ~.md~
+after any transform).  ~line_map~ is optional: only meaningful when
+~source_content~ is a string (comment-stripping path); undefined for
+pandoc-converted sources.  Pass-through files have
+~source_name === target_name~ and ~source_content === target_content~.
+**** Alternatives considered
+- Store only ~target_content~: loses source for linting and line mapping.
+- Store ~source_content~ only for transformed files: inconsistent shape,
+  complicates consumers.
+
 *** [2026-03-26] – Manifest stores .md files as strings, all others as Buffers
 **** Reason
 ~Buffer → string~ via UTF-8 is not lossless for binary files (invalid byte

@@ -10,8 +10,7 @@ import {tmpdir, homedir} from 'node:os'
 import {join, resolve, dirname, basename} from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {strip_html_comments} from '../strip-html-comments.ts'
-import {target_filename} from '../skill-shed.ts'
-import {build_manifest_from_dir} from '../manifest.ts'
+import {build_manifest_from_dir, validate_manifest, find_target_conflicts, target_filename} from '../manifest.ts'
 
 const exec_file = promisify(execFile)
 const script = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'skill-shed.ts')
@@ -661,16 +660,16 @@ test('target_filename: no extension unchanged', () => {
 
 // * build_manifest_from_dir
 
-test('build_manifest_from_dir: returns files with their contents', async () => {
+test('build_manifest_from_dir: returns entries with source and target names and contents', async () => {
 	const dir = await make_tmp_dir()
 	await writeFile(join(dir, 'SKILL.md'), 'hello')
 	await writeFile(join(dir, 'extra.txt'), 'world')
 
 	const manifest = await build_manifest_from_dir(dir)
 
-	assert.deepStrictEqual([...manifest.keys()].sort(), ['SKILL.md', 'extra.txt'])
-	assert.strictEqual(manifest.get('SKILL.md')!.toString(), 'hello')
-	assert.strictEqual(manifest.get('extra.txt')!.toString(), 'world')
+	assert.deepStrictEqual(manifest.map(e => e.source_name), ['SKILL.md', 'extra.txt'])
+	assert.strictEqual(manifest[0].target_content, 'hello')
+	assert.deepStrictEqual(manifest[1].target_content, Buffer.from('world'))
 })
 
 test('build_manifest_from_dir: excludes dotfiles', async () => {
@@ -681,27 +680,27 @@ test('build_manifest_from_dir: excludes dotfiles', async () => {
 
 	const manifest = await build_manifest_from_dir(dir)
 
-	assert.deepStrictEqual([...manifest.keys()], ['SKILL.md'])
+	assert.deepStrictEqual(manifest.map(e => e.source_name), ['SKILL.md'])
 })
 
-test('build_manifest_from_dir: empty directory returns empty map', async () => {
+test('build_manifest_from_dir: empty directory returns empty array', async () => {
 	const dir = await make_tmp_dir()
 
 	const manifest = await build_manifest_from_dir(dir)
 
-	assert.strictEqual(manifest.size, 0)
+	assert.strictEqual(manifest.length, 0)
 })
 
-test('build_manifest_from_dir: only dotfiles returns empty map', async () => {
+test('build_manifest_from_dir: only dotfiles returns empty array', async () => {
 	const dir = await make_tmp_dir()
 	await writeFile(join(dir, '.env'), 'X=1')
 
 	const manifest = await build_manifest_from_dir(dir)
 
-	assert.strictEqual(manifest.size, 0)
+	assert.strictEqual(manifest.length, 0)
 })
 
-test('build_manifest_from_dir: keys are sorted', async () => {
+test('build_manifest_from_dir: entries are sorted by source_name', async () => {
 	const dir = await make_tmp_dir()
 	await writeFile(join(dir, 'zebra.txt'), '')
 	await writeFile(join(dir, 'alpha.txt'), '')
@@ -709,27 +708,94 @@ test('build_manifest_from_dir: keys are sorted', async () => {
 
 	const manifest = await build_manifest_from_dir(dir)
 
-	assert.deepStrictEqual([...manifest.keys()], ['alpha.txt', 'middle.txt', 'zebra.txt'])
+	assert.deepStrictEqual(manifest.map(e => e.source_name), ['alpha.txt', 'middle.txt', 'zebra.txt'])
 })
 
-test('build_manifest_from_dir: .md files stored as strings', async () => {
+test('build_manifest_from_dir: .md source_content is string', async () => {
 	const dir = await make_tmp_dir()
 	await writeFile(join(dir, 'SKILL.md'), 'hello')
 	await writeFile(join(dir, 'SKILL.source.md'), 'world')
 
 	const manifest = await build_manifest_from_dir(dir)
 
-	assert.strictEqual(typeof manifest.get('SKILL.md'), 'string')
-	assert.strictEqual(typeof manifest.get('SKILL.source.md'), 'string')
+	assert.ok(manifest.every(e => typeof e.source_content === 'string'))
 })
 
-test('build_manifest_from_dir: non-.md files stored as Buffers', async () => {
+test('build_manifest_from_dir: non-.md source_content is Buffer', async () => {
 	const dir = await make_tmp_dir()
 	await writeFile(join(dir, 'image.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]))
 	await writeFile(join(dir, 'notes.txt'), 'text')
 
 	const manifest = await build_manifest_from_dir(dir)
 
-	assert.ok(manifest.get('image.png') instanceof Buffer)
-	assert.ok(manifest.get('notes.txt') instanceof Buffer)
+	assert.ok(manifest.every(e => e.source_content instanceof Buffer))
+})
+
+test('build_manifest_from_dir: .source.md strips comments into target_content', async () => {
+	const dir = await make_tmp_dir()
+	await writeFile(join(dir, 'SKILL.source.md'), '# Hello\n<!-- comment -->\nworld')
+
+	const manifest = await build_manifest_from_dir(dir)
+
+	assert.strictEqual(manifest[0].target_name, 'SKILL.md')
+	assert.strictEqual(manifest[0].target_content, '# Hello\nworld')
+	assert.strictEqual(manifest[0].source_content, '# Hello\n<!-- comment -->\nworld')
+})
+
+test('build_manifest_from_dir: pass-through .md has equal source and target content', async () => {
+	const dir = await make_tmp_dir()
+	await writeFile(join(dir, 'SKILL.md'), '# Hello')
+
+	const manifest = await build_manifest_from_dir(dir)
+
+	assert.strictEqual(manifest[0].source_name, 'SKILL.md')
+	assert.strictEqual(manifest[0].target_name, 'SKILL.md')
+	assert.strictEqual(manifest[0].source_content, manifest[0].target_content)
+})
+
+// * find_target_conflicts
+
+test('find_target_conflicts: returns empty array when no conflicts', () => {
+	assert.deepStrictEqual(find_target_conflicts(['SKILL.md', 'extra.txt']), [])
+})
+
+test('find_target_conflicts: returns conflicting group', () => {
+	const result = find_target_conflicts(['SKILL.md', 'SKILL.source.md'])
+
+	assert.strictEqual(result.length, 1)
+	assert.deepStrictEqual(result[0], ['SKILL.md', 'SKILL.source.md'])
+})
+
+test('find_target_conflicts: returns multiple conflicting groups', () => {
+	const result = find_target_conflicts(['SKILL.source.md', 'SKILL.md', 'extra.source.md', 'extra.md'])
+
+	assert.strictEqual(result.length, 2)
+})
+
+test('find_target_conflicts: returns empty array for empty input', () => {
+	assert.deepStrictEqual(find_target_conflicts([]), [])
+})
+
+// * validate_manifest
+
+test('validate_manifest: passes when all target_names are unique', () => {
+	const manifest = [
+		{source_name: 'SKILL.md', target_name: 'SKILL.md', source_content: '', target_content: ''},
+		{source_name: 'extra.txt', target_name: 'extra.txt', source_content: Buffer.alloc(0), target_content: Buffer.alloc(0)},
+	]
+
+	assert.doesNotThrow(() => validate_manifest(manifest))
+})
+
+test('validate_manifest: throws listing all conflicting source names', () => {
+	const manifest = [
+		{source_name: 'SKILL.source.md', target_name: 'SKILL.md', source_content: '', target_content: ''},
+		{source_name: 'SKILL.md', target_name: 'SKILL.md', source_content: '', target_content: ''},
+	]
+
+	assert.throws(() => validate_manifest(manifest), new Error('Conflicting files: SKILL.source.md, SKILL.md'))
+})
+
+test('validate_manifest: passes on empty manifest', () => {
+	assert.doesNotThrow(() => validate_manifest([]))
 })
