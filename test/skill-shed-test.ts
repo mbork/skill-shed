@@ -9,11 +9,11 @@ import {mkdtemp, writeFile, readFile, readdir} from 'node:fs/promises'
 import {tmpdir, homedir} from 'node:os'
 import {join, resolve, dirname, basename} from 'node:path'
 import {fileURLToPath} from 'node:url'
-import {strip_html_comments} from '../strip-html-comments.ts'
-import {build_manifest_from_dir, validate_manifest, find_target_conflicts, target_filename} from '../manifest.ts'
+import {strip_html_comments} from '../src/strip-html-comments.ts'
+import {build_manifest_from_dir, validate_manifest, find_target_conflicts, target_filename} from '../src/manifest.ts'
 
 const exec_file = promisify(execFile)
-const script = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'skill-shed.ts')
+const script = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'skill-shed.ts')
 
 // * Helpers
 

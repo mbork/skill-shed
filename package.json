@@ -24,7 +24,7 @@
   },
   "type": "module",
   "bin": {
-    "skill-shed": "skill-shed.ts"
+    "skill-shed": "src/skill-shed.ts"
   },
   "scripts": {
     "lint": "eslint .",

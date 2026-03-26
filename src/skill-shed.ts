@@ -100,7 +100,7 @@ async function init(skill_dir: string, deploy_dir_arg?: string, comments_mode: b
 			skill_dir,
 			(comments_mode ?? true) ? 'SKILL.source.md' : 'SKILL.md',
 		)
-		const template_path = resolve(import.meta.dirname, 'SKILL.template.md')
+		const template_path = resolve(import.meta.dirname, '..', 'assets', 'SKILL.template.md')
 		const template = await readFile(template_path, 'utf8')
 		const substituted = template
 			.replace('{{name}}', skill_name)
