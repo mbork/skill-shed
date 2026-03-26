@@ -123,13 +123,14 @@ remains the recommended default.
   for non-md sources; all comment stripping uses the built-in scanner.
 
 * TODO Improve and test the CLI UI
-Make all commands work in the current directory.  Allow specifying
+Make sure all commands work in the current directory.  Allow specifying
 ~deploy_dir~ in ~deploy~ (overrides ~.env~).  Allow omitting positional
 arguments.  Consider adding non-positional arguments ~--skill-dir~ and
 ~--deploy-dir~.  Add tests for all those cases.
 
-** Steps [/]
-- [ ] Make all commands default to current directory when no skill-dir given
+** Steps [1/5]
+- [X] Make all commands default to current directory when no skill-dir given
+- [ ] Test the "current directory" behavior
 - [ ] Allow specifying deploy_dir in deploy command (overrides .env)
 - [ ] Consider adding --skill-dir and --deploy-dir named flags
 - [ ] Add tests for all new argument forms
