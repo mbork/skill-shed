@@ -664,7 +664,7 @@ test('target_filename: no extension unchanged', () => {
 	assert.strictEqual(target_filename('LICENSE'), 'LICENSE')
 })
 
-// * build_manifest_from_dir
+// ** build_manifest_from_dir
 
 test('build_manifest_from_dir: returns entries with source and target names and contents', async () => {
 	const dir = await make_tmp_dir()
@@ -759,7 +759,7 @@ test('build_manifest_from_dir: pass-through .md has equal source and target cont
 	assert.strictEqual(manifest[0].source_content, manifest[0].target_content)
 })
 
-// * find_target_conflicts
+// ** find_target_conflicts
 
 test('find_target_conflicts: returns empty array when no conflicts', () => {
 	assert.deepStrictEqual(find_target_conflicts(['SKILL.md', 'extra.txt']), [])
@@ -782,7 +782,7 @@ test('find_target_conflicts: returns empty array for empty input', () => {
 	assert.deepStrictEqual(find_target_conflicts([]), [])
 })
 
-// * validate_manifest
+// ** validate_manifest
 
 test('validate_manifest: passes when all target_names are unique', () => {
 	const manifest = [
