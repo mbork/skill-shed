@@ -243,8 +243,8 @@ Support deploying skills that consist of more than one file.
 - [[*Skill deployment]]
 - [[*Skill comment stripping]]
 
-** Steps [/]
-- [ ] Implement ~build_manifest_from_dir~: ~readdir~ + dotfile filter, returns ~Map<string, Buffer|string>~
+** Steps [1/11]
+- [X] Implement ~build_manifest_from_dir~: ~readdir~ + dotfile filter, returns ~Map<string, Buffer|string>~
 - [ ] Implement `*.source.md` → `*.md` comment stripping for all files in the manifest
 - [ ] Implement sidecar read/write and per-file overwrite check (absent/owned/unowned cases)
 - [ ] Decide and implement atomicity strategy on partial failure
@@ -256,6 +256,22 @@ Support deploying skills that consist of more than one file.
 - [ ] Implement DEPLOY_DOTFILES whitelist in .env
 - [ ] Check config consistency (DEPLOY_DOTFILES lists untracked file; MANIFEST_CMD command not on $PATH)
 ** Decisions
+*** [2026-03-26] – Manifest stores .md files as strings, all others as Buffers
+**** Reason
+~Buffer → string~ via UTF-8 is not lossless for binary files (invalid byte
+sequences are replaced with U+FFFD), so storing binary files as strings is
+wrong.  A null-byte heuristic for binary detection is unreliable and puts
+content-type logic in the wrong layer.  Extension-based detection is
+deterministic and correct: ~*.md~ files (including ~*.source.md~) are always
+text; everything else is kept as ~Buffer~.  No heuristic needed; the manifest
+already has the filename.
+**** Alternatives considered
+- ~Buffer~ for all files, decode at use site: scatters ~.toString('utf8')~ calls
+  across all consumers; punishes the common (text) case.
+- Null-byte heuristic: unreliable; misclassifies valid UTF-8 with embedded nulls.
+- ~string~ for all files via ~latin1~: technically lossless but unnatural and
+  requires ~latin1~ encode/decode at every binary use site.
+
 *** [2026-03-26] – Manifest as abstraction; MVP uses build_manifest_from_dir
 **** Reason
 The manifest (a ~Map~ of filename → content/Buffer) is a stable abstraction.

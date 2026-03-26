@@ -11,6 +11,7 @@ import {join, resolve, dirname, basename} from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {strip_html_comments} from '../strip-html-comments.ts'
 import {target_filename} from '../skill-shed.ts'
+import {build_manifest_from_dir} from '../manifest.ts'
 
 const exec_file = promisify(execFile)
 const script = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'skill-shed.ts')
@@ -656,4 +657,79 @@ test('target_filename: non-md extension unchanged', () => {
 
 test('target_filename: no extension unchanged', () => {
 	assert.strictEqual(target_filename('LICENSE'), 'LICENSE')
+})
+
+// * build_manifest_from_dir
+
+test('build_manifest_from_dir: returns files with their contents', async () => {
+	const dir = await make_tmp_dir()
+	await writeFile(join(dir, 'SKILL.md'), 'hello')
+	await writeFile(join(dir, 'extra.txt'), 'world')
+
+	const manifest = await build_manifest_from_dir(dir)
+
+	assert.deepStrictEqual([...manifest.keys()].sort(), ['SKILL.md', 'extra.txt'])
+	assert.strictEqual(manifest.get('SKILL.md')!.toString(), 'hello')
+	assert.strictEqual(manifest.get('extra.txt')!.toString(), 'world')
+})
+
+test('build_manifest_from_dir: excludes dotfiles', async () => {
+	const dir = await make_tmp_dir()
+	await writeFile(join(dir, 'SKILL.md'), 'content')
+	await writeFile(join(dir, '.env'), 'SECRET=1')
+	await writeFile(join(dir, '.gitignore'), '*.log')
+
+	const manifest = await build_manifest_from_dir(dir)
+
+	assert.deepStrictEqual([...manifest.keys()], ['SKILL.md'])
+})
+
+test('build_manifest_from_dir: empty directory returns empty map', async () => {
+	const dir = await make_tmp_dir()
+
+	const manifest = await build_manifest_from_dir(dir)
+
+	assert.strictEqual(manifest.size, 0)
+})
+
+test('build_manifest_from_dir: only dotfiles returns empty map', async () => {
+	const dir = await make_tmp_dir()
+	await writeFile(join(dir, '.env'), 'X=1')
+
+	const manifest = await build_manifest_from_dir(dir)
+
+	assert.strictEqual(manifest.size, 0)
+})
+
+test('build_manifest_from_dir: keys are sorted', async () => {
+	const dir = await make_tmp_dir()
+	await writeFile(join(dir, 'zebra.txt'), '')
+	await writeFile(join(dir, 'alpha.txt'), '')
+	await writeFile(join(dir, 'middle.txt'), '')
+
+	const manifest = await build_manifest_from_dir(dir)
+
+	assert.deepStrictEqual([...manifest.keys()], ['alpha.txt', 'middle.txt', 'zebra.txt'])
+})
+
+test('build_manifest_from_dir: .md files stored as strings', async () => {
+	const dir = await make_tmp_dir()
+	await writeFile(join(dir, 'SKILL.md'), 'hello')
+	await writeFile(join(dir, 'SKILL.source.md'), 'world')
+
+	const manifest = await build_manifest_from_dir(dir)
+
+	assert.strictEqual(typeof manifest.get('SKILL.md'), 'string')
+	assert.strictEqual(typeof manifest.get('SKILL.source.md'), 'string')
+})
+
+test('build_manifest_from_dir: non-.md files stored as Buffers', async () => {
+	const dir = await make_tmp_dir()
+	await writeFile(join(dir, 'image.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+	await writeFile(join(dir, 'notes.txt'), 'text')
+
+	const manifest = await build_manifest_from_dir(dir)
+
+	assert.ok(manifest.get('image.png') instanceof Buffer)
+	assert.ok(manifest.get('notes.txt') instanceof Buffer)
 })
