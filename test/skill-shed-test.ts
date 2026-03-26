@@ -30,11 +30,11 @@ async function run_init(skill_dir: string, deploy_dir?: string, flags: string[] 
 	}
 }
 
-async function run_deploy(skill_dir: string): Promise<Run_result> {
+async function run_deploy(skill_dir: string, options: {cwd?: string} = {}): Promise<Run_result> {
 	const env = {...process.env}
 	delete env.TARGET_DIRECTORY
 	try {
-		const result = await exec_file('node', [script, 'deploy', skill_dir], {env})
+		const result = await exec_file('node', [script, 'deploy', skill_dir], {env, cwd: options.cwd})
 		return {stdout: result.stdout, stderr: result.stderr, code: 0}
 	} catch (e: unknown) {
 		const err = e as {stdout?: string, stderr?: string, code?: number}
@@ -415,6 +415,20 @@ test('deploy: target directory is created if missing', async () => {
 
 	assert.strictEqual(result.code, 0)
 	const deployed = await readFile(join(skill_dir, 'nonexistent', 'SKILL.md'), 'utf8')
+	assert.strictEqual(deployed, content)
+})
+
+test('deploy: relative TARGET_DIRECTORY is resolved relative to skill_dir, not cwd', async () => {
+	const skill_dir = await make_tmp_dir()
+	const other_dir = await make_tmp_dir()
+	const content = '# My skill\n'
+	await writeFile(join(skill_dir, 'SKILL.md'), content)
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=output\n`)
+
+	const result = await run_deploy(skill_dir, {cwd: other_dir})
+
+	assert.strictEqual(result.code, 0)
+	const deployed = await readFile(join(skill_dir, 'output', 'SKILL.md'), 'utf8')
 	assert.strictEqual(deployed, content)
 })
 
