@@ -499,6 +499,17 @@ into one of two cases, distinguishable via the sidecar:
   harder to reason about.
 - Ignore unowned files: silently accumulates cruft.
 ** Session log
+*** [2026-03-26] (session 2)
+- Completed: project restructured (TS sources → ~src/~, ~SKILL.template.md~ → ~assets/~); ~init~
+  extracted to ~src/init.ts~, ~deploy~ to ~src/deploy.ts~, ~skill-shed.ts~ is now a thin dispatcher;
+  ~dotenv_config~ replaced with ~dotenv_parse~ (no ~process.env~ mutation); added test for relative
+  ~TARGET_DIRECTORY~ with different cwd; added two tests for non-SKILL ~.source.md~ comment stripping;
+  README assessed and improved; two new journal features added (global config, npm publish)
+- In progress: NONE
+- Next: implement sidecar read/write and per-file overwrite check (step 3), or switch to Help/usage
+  messages first (higher MVP priority)
+- Blockers: NONE
+- Decisions: ~dotenv_parse~ over ~dotenv_config~ to avoid mutating ~process.env~ in a module
 *** [2026-03-26]
 - Completed: steps 1–2 — ~manifest.ts~ with ~ManifestEntry[]~ type, ~build_manifest_from_dir~,
   ~find_target_conflicts~, ~validate_manifest~ (incl. SKILL.md target check); ~deploy~ rewritten
