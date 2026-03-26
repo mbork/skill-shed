@@ -481,6 +481,40 @@ test('deploy: only .source.md files have comments stripped', async () => {
 	assert.strictEqual(deployed_extra, 'C\n<!-- keep me -->\nD\n')
 })
 
+test('deploy: non-SKILL .source.md file has comments stripped alongside SKILL.source.md', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	await writeFile(join(skill_dir, 'SKILL.source.md'), '# Skill\n<!-- strip -->\nContent.\n')
+	await writeFile(join(skill_dir, 'reference.source.md'), '# Ref\n<!-- strip -->\nRef content.\n')
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+
+	const result = await run_deploy(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	const deployed_skill = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
+	assert.strictEqual(deployed_skill, '# Skill\nContent.\n')
+	const deployed_reference = await readFile(join(target_dir, 'reference.md'), 'utf8')
+	assert.strictEqual(deployed_reference, '# Ref\nRef content.\n')
+	assert.deepStrictEqual((await readdir(target_dir)).sort(), ['SKILL.md', 'reference.md'])
+})
+
+test('deploy: non-SKILL .source.md has comments stripped when SKILL.md is a pass-through', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), '# Skill\n<!-- keep -->\nContent.\n')
+	await writeFile(join(skill_dir, 'reference.source.md'), '# Ref\n<!-- strip -->\nRef content.\n')
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+
+	const result = await run_deploy(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	const deployed_skill = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
+	assert.strictEqual(deployed_skill, '# Skill\n<!-- keep -->\nContent.\n')
+	const deployed_reference = await readFile(join(target_dir, 'reference.md'), 'utf8')
+	assert.strictEqual(deployed_reference, '# Ref\nRef content.\n')
+	assert.deepStrictEqual((await readdir(target_dir)).sort(), ['SKILL.md', 'reference.md'])
+})
+
 // ** strip_html_comments
 
 test('strip_html_comments: empty input unchanged', () => {
