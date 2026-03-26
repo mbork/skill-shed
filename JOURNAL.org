@@ -188,6 +188,35 @@ Add a general usage message (printed when no command is given or when
 - [ ] Replace the current inline usage strings with calls to the new help functions
 - [ ] Support `--help` / `-h` flag as an alias for the `help` command
 ** Decisions
+*** [2026-03-26] – Implement both `help` subcommand and `--help` / `-h` flag
+**** Reason
+Both entry points are expected by users: `--help` is the Unix/POSIX convention;
+`help [command]` is the Git-style convention common in multi-command CLIs.
+Supporting both maximises discoverability at negligible extra cost.
+**** Alternatives considered
+- `--help` only: misses users who type `skill-shed help`.
+- `help` subcommand only: misses users who reach for `--help` first.
+
+*** [2026-03-26] – Detect `--help` by scanning `process.argv` before dispatching (solution B)
+**** Reason
+Avoids adding a `help` option to every subcommand's `parseArgs` call.
+A single pre-dispatch check in `main` keeps help logic centralized and
+doesn't require touching command modules when new commands are added.
+**** Alternatives considered
+- Add `help: boolean` to each subcommand's `parseArgs` (solution A): repetitive;
+  requires updating every command module.
+
+*** [2026-03-26] – `--help` on unknown command: report unknown command, then print general usage
+**** Reason
+Silently printing general usage on an unknown command hides a likely typo.
+Reporting the unknown command first gives the user actionable information,
+then general usage shows what commands are valid.
+
+*** [2026-03-26] – General usage message includes tool description and full command list
+**** Reason
+A bare synopsis (`Usage: skill-shed <command>`) is not enough for a stranger
+to understand what the tool does.  A one-paragraph description plus a
+one-line summary per command makes the tool self-documenting at the terminal.
 ** Session log
 
 * BLOCKED Skill linting
@@ -230,6 +259,37 @@ comment lines are removed.
 - [ ] Update callers (~deploy~, ~init~) to use the new return value (ignoring the mapping where not needed)
 - [ ] Add tests for line mapping correctness
 
+** Decisions
+** Session log
+
+* TODO Publish to npm and document installation
+Publish the package to npm so users can install it with a single
+command, and document installation clearly in the README.
+
+** Steps [/]
+- [ ] Choose and verify package name on npm (=skill-shed= or scoped =@mbork/skill-shed=)
+- [ ] Add =bin= entry and verify =npm pack= produces the right files (include =src/= and =assets/=)
+- [ ] Add =.npmignore= or =files= field to exclude =test/=, =JOURNAL.org=, etc.
+- [ ] Do a dry-run publish with =npm publish --dry-run= and check the output
+- [ ] Publish with =npm publish=
+- [ ] Add Installation section to README (=npm install -g skill-shed= or =npx skill-shed=)
+- [ ] Add prerequisites note (Node.js ≥ 24, Git, pandoc?)
+** Decisions
+** Session log
+
+* TODO Global config file
+Support a global config file (e.g. =~/.skill-shed.config.json=) for
+user-level settings that apply across all skills, such as the default
+skills directory.  Decouples the tool from any specific AI vendor's
+directory layout.
+
+** Steps [/]
+- [ ] Define config file location and format (JSON, path: =~/.skill-shed.config.json=)
+- [ ] Load and parse config at startup; ignore missing file (no config = defaults)
+- [ ] Support =default_target_directory= setting: overrides the default =~/.claude/skills/= base path used by =init=
+- [ ] Add =config= subcommand or flag to set/show config values from the CLI
+- [ ] Document config file format in README and =help= output
+- [ ] Add tests for config loading, fallback to defaults, and override behaviour
 ** Decisions
 ** Session log
 
