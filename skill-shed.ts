@@ -118,7 +118,7 @@ async function init(skill_dir: string, deploy_dir_arg?: string, comments_mode: b
 async function deploy(skill_dir: string): Promise<void> {
 	const env_path = resolve(skill_dir, '.env')
 
-	const env_result = dotenv_config({path: env_path})
+	const env_result = dotenv_config({path: env_path, quiet: true})
 	if (env_result.error) {
 		const err = env_result.error as NodeJS.ErrnoException
 		if (err.code === 'ENOENT') {
