@@ -232,8 +232,9 @@ comment lines are removed.
 ** Decisions
 ** Session log
 
-* TODO Multi-file skill support
+* INPROGRESS Multi-file skill support
 :LOGBOOK:
+- State "INPROGRESS" from "TODO"       [2026-03-25 Wed 16:50]
 - State "TODO"       from "BLOCKED"    [2026-03-25 Wed 16:29]
 :END:
 Support deploying skills that consist of more than one file.
@@ -243,19 +244,37 @@ Support deploying skills that consist of more than one file.
 - [[*Skill comment stripping]]
 
 ** Steps [/]
-- [ ] Implement `git ls-files`-based manifest with MANIFEST_CMD fallback.  Make it a function which
-  returns a ~Map~ with filenames as keys and contents plus mtimes as values (~Buffer~​s in case of
-  binary files)
-- [ ] Implement `*.source.md` → `*.md` comment stripping for all md files
-- [ ] Implement production mode (abort on any unclean state)
+- [ ] Implement ~build_manifest_from_dir~: ~readdir~ + dotfile filter, returns ~Map<string, Buffer|string>~
+- [ ] Implement `*.source.md` → `*.md` comment stripping for all files in the manifest
+- [ ] Implement sidecar read/write and per-file overwrite check (absent/owned/unowned cases)
+- [ ] Decide and implement atomicity strategy on partial failure
+- [ ] Implement stale-file policy: delete owned files, abort on unowned files
+- [ ] Replace ~build_manifest_from_dir~ with ~build_manifest_from_git~ (`git ls-files --exclude-standard` + MANIFEST_CMD fallback)
+- [ ] Implement production mode (abort on any unclean git state)
 - [ ] Implement development mode (deploy index or working tree, with reporting)
 - [ ] Implement reading deleted-in-working-tree files from git index
-- [ ] Implement per-file mtime guards
-- [ ] Decide and implement atomicity strategy on partial failure
-- [ ] Decide stale-file policy (deletion vs. warning vs. ignore)
+- [ ] Implement DEPLOY_DOTFILES whitelist in .env
 - [ ] Check config consistency (DEPLOY_DOTFILES lists untracked file; MANIFEST_CMD command not on $PATH)
 ** Decisions
+*** [2026-03-26] – Manifest as abstraction; MVP uses build_manifest_from_dir
+**** Reason
+The manifest (a ~Map~ of filename → content/Buffer) is a stable abstraction.
+The MVP implements it as ~build_manifest_from_dir~: ~readdir~ + dotfile filter
+(~10 LoC).  Git support lands as =build_manifest_from_git= and replaces it.
+No code is thrown away; the interface is unchanged.
+Dotfile exclusion (already the design decision) covers ~.env~ as a side effect,
+eliminating the safety concern raised against a ~readdir~-based approach.
+=*~= backup files will be deployed by the MVP — ugly but harmless; addressed
+when ~build_manifest_from_git~ lands.
+**** Overrides
+- [[*\[2026-03-24\] – File manifest via git ls-files --exclude-standard (run from skill dir); MANIFEST_CMD overrides in .env]]
+  (deferred to a later step; git integration is ~build_manifest_from_git~)
+**** Alternatives considered
+- Skip MVP, implement git manifest directly: more complex first step, no benefit
+  given the abstraction makes the swap trivial.
+
 *** [2026-03-24] – File manifest via git ls-files --exclude-standard (run from skill dir); MANIFEST_CMD overrides in .env
+NOTE: superseded by [[*\[2026-03-26\] – Manifest as abstraction; MVP uses build_manifest_from_dir]]
 **** Reason
 `git ls-files --exclude-standard` run from the skill directory naturally
 scopes to the skill subtree (monorepo-safe) and respects `.gitignore`,
@@ -319,7 +338,66 @@ Deploy working tree (index == HEAD, working tree ≠ HEAD): list all
 deployed files marking changed ones (includes untracked non-ignored);
 separately list files in HEAD deleted from working tree (skipped).
 Clean: no output.
+
+*** [2026-03-25] – Replace mtime guard with content-hash sidecar `.skill-shed-manifest.json`
+**** Reason
+Mtime is unreliable in a git workflow: index objects have no mtime; `git
+checkout`/`stash pop` reset working-tree mtimes to now; partially staged
+files have a working-tree mtime that differs from the staged content.
+Content hashing is immune to all of these.  The sidecar records SHA-256
+hashes of every file as deployed; next deploy compares current target
+hashes against stored hashes to detect direct edits.
+**** Alternatives considered
+- Keep mtime for single-file and add hashing only for multi-file: two code
+  paths, inconsistent semantics.
+
+*** [2026-03-25] – Sidecar `.skill-shed-manifest.json` lives in the target directory
+**** Reason
+The sidecar guards the target, so it belongs there.  The overwrite check
+can be performed without knowing the source path or loading ~.env~.  If
+the source directory is moved or deleted the target remains protected.
+**** Alternatives considered
+- Source dir: requires resolving target path before the check can run;
+  orphaned if source dir is moved.
+
+*** [2026-03-25] – Per-file overwrite safety check against sidecar
+**** Reason
+For each file to be deployed, three cases arise:
+1. Target file absent: write freely (genuinely new).
+2. Target file present, sidecar has entry: hash check — abort if hashes
+   differ (direct edit detected), otherwise overwrite.
+3. Target file present, sidecar has no entry (sidecar absent or file not
+   listed): abort unless ~--force~ (file may have been manually created).
+The deploy aborts as a whole on any case-2 or case-3 hit; partial deploys
+leave the target in an inconsistent state.  ~--force~ bypasses both the
+missing-sidecar check and a hash-mismatch check (same flag, same
+semantics: "I accept responsibility for any overwritten edits").
+**** Alternatives considered
+- Abort only when sidecar is entirely absent: misses the case where a new
+  file is added to an existing multi-file skill after first deploy.
+- Abort only the conflicting file, deploy the rest: partial deploy leaves
+  target inconsistent; --force covers the intentional-overwrite use case.
+
+*** [2026-03-25] – Stale-file policy: delete owned files, abort on unowned files
+**** Reason
+A file present in the target but absent from the current deploy set falls
+into one of two cases, distinguishable via the sidecar:
+- In sidecar: skill-shed deployed it; it was deleted in the new version.
+  Safe to auto-delete.
+- Not in sidecar: not deployed by skill-shed; origin unknown.  Abort
+  unless ~--force~ (conservative; may warrant further thought).
+**** Alternatives considered
+- Warn instead of abort on unowned files: leaves target in mixed state,
+  harder to reason about.
+- Ignore unowned files: silently accumulates cruft.
 ** Session log
+*** [2026-03-25]
+- Completed: design only — four decisions logged (mtime → content-hash sidecar;
+  sidecar in target dir; per-file overwrite check logic; stale-file policy)
+- In progress: NONE
+- Next: update Steps to reflect sidecar/hash design, then start implementing
+- Blockers: NONE
+- Decisions: all logged above
 
 * DONE Skill comment stripping
 :LOGBOOK:
