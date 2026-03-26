@@ -1,35 +1,130 @@
 #+TITLE: Skill shed – a shed of tools for managing agent skills
 #+AUTHOR: Marcin Borkowski
 
-A set of tools for managing agent skills: format conversion, comment
-stripping, linting, deployment.  Currently in WiP/PoC stage.
+* Problem statement
+You are developing a [[https://agentskills.io][skill for a coding agent]] (which is basically
+a set of instructions for an LLM to perform a specific class of tasks,
+so very much like a computer program, only written in natural
+language), and want to treat it like code:
+- put it under version control,
+- add comments to it,
+- deploy a specified version, downgrade when a bug is discovered,
+- separate the place where the skill is developed from the place where
+  the production version, used by the agent, lives,
+- check for common mistakes in an automated way, and
+- write it the way you like.
 
-* Features
-** Initialize a skill directory
-** Copy ~SKILL.md~ to a directory specified in ~.env~
-** TODO Strip HTML comments from ~SKILL.md~
-** TODO Deploy multifile skills
-** TODO Lint skills
-** TODO Allow for writing skills in formats other than Markdown
+Writing skills directly in =~/.your_favorite_coding_agent/skills= (or
+even in some other place and then simply copying them there) is not
+sustainable:
+- While you can ~git init~ there, you'd probably prefer to have them
+  under =~/my_side_projects/skills= or somewhere similar, for example
+  because you use [[https://git-scm.com/docs/git-config#_conditional_includes][conditional includes]] and want to have all your
+  professional or side projects to live under a common directory.
+- Skills are written in Markdown which does not support comments
+  natively.  If you want to add TODO/FIXME or maybe a rationale to
+  your skill, you're out of luck – and since skills enter the LLM's
+  context, it's important to keep them short.  You can add a secondary
+  file (not supposed to be read by the model) with comments to your
+  skill directory, but we all know what happens with comments which
+  are far from the code they comment: they quickly rot.
+- If you actively develop a skill, you might decide that the newer
+  version is worse and want to revert to an earlier version.
+- If you develop the skill in some directory and then copy it to the
+  place where the agent looks for it, accidentally modifying the skill
+  in the target directory and then issuing the copy command will
+  silently overwrite your modifications.
+- If your skill is comprised of multiple files, it's easy to rename
+  one of them and forget to change one or more places it is
+  referenced.  And you might forget the names of frontmatter fields
+  (was it ~tools~, ~allowed-tools~ or ~approved-tools~?).  And the URL
+  you refer to in your skill might become dead.  Problem is, such
+  a buggy skill will silently fail instead of raising an error, so you
+  won't even know that something is broken – you'll be just scratching
+  your head why the skill works suboptimally.  All these issues could
+  be found in an automated way before you deploy your skill.
+- If Markdown is not your cup of tea, tough – you may try writing your
+  skill in Org mode format or AsciiDoc, but you still need to call it
+  ~SKILL.md~, most probably confusing your editor.
+
+This project aims to solve these problems.  Currently, it is in very
+early stage and only the solutions to the first two (version control
+in a separate directory and comment stripping) are implemented, but
+I'm working on the third and fourth ones and have a plan for the rest.
+
+* Prerequisites
+Currently only Node.js 24+.
+
+* Installation
+Because of the PoC/WiP status of this project, currently the suggested
+way to install this is to clone the repo (or download a zip using
+GitHub's web UI), ~cd~ to it and say something along the lines of
+#+begin_src shell
+  npm install --global --prefix "$HOME/bin" --omit=dev
+#+end_src
+assuming =~/bin= is in your ~$PATH~.  (If you don't have =~/bin= in
+~$PATH~ and don't know how to add it there, you might consider ~sudo
+npm install --global --omit=dev~, but ~sudo npm install --global~ is
+infamous for causing problems on some setups.)
+
+When ~skill-shed~ becomes more mature, I will upload it to [[https://www.npmjs.com/][NPM]], and
+the installation will become much simpler.
+
+* Quick start
+#+begin_src shell
+  skill-shed init my-useful-skill
+#+end_src
+creates a directory ~my-useful-skill~ with two files: ~.env~ (defining
+the ~TARGET_DIRECTORY~, see below) and ~SKILL.source.md~, containing
+a template skill frontmatter, a HTML comment and a stub to fill with
+the skill's contents.  Edit them to your liking and say
+#+begin_src shell
+  skill-shed deploy my-useful-skill
+#+end_src
+in the same directory where you issued the ~init~ command, or just
+#+begin_src shell
+  skill-shed deploy
+#+end_src
+in the newly created skill's directory – and your skill will be copied
+to ~TARGET_DIRECTORY~, renamed to ~SKILL.md~ and with the comment
+stripped.
 
 * Usage
-
-Initialize a skill directory:
+** Initialize a skill directory
 #+begin_src shell
-  skill-shed init <skill-directory> [<deploy-directory>]
+  skill-shed init [ <skill-directory> ] [ <deploy-directory> ] [ --comments | --no-comments ]
 #+end_src
-By default, skills will be deployed to =~/.claude/skills=.  This can
-be changed by editing ~.env~ in the skill directory and setting
-~TARGET_DIRECTORY~.  That directory is interpreted as relative to the
-skill directory.
+If ~<deploy-directory>~ is not supplied, skills will be deployed under
+=~/.claude/skills=.  (This will be made configurable soon.)  The
+~<deploy-directory>~ is copied to ~.env~ in the ~<skill-directory>~
+(the current directory by default) and can be changed at any point in
+time.
 
-Deploy a skill:
+If ~--comments~ is issued (the default), a file called
+~SKILL.source.md~ containing a generic template will be created in
+~<skill-directory>~.  If ~--no-comments~ is issued, it will be
+~SKILL.md~.  The difference is that when ~SKILL.source.md~ is present,
+deployment (see below) will strip HTML comments from ~SKILL.source.md~
+and put the result in ~SKILL.md~ in ~TARGET_DIRECTORY~.
+
+Initializing a directory which already contains a skill also works
+(unless it already contains ~.env~), so if you have a bunch of skills
+written before you started using ~skill-shed~, you can safely
+~skill-shed init~ them.  If you want to start using the
+comment-stripping feature, though, you'll have to rename ~.md~ files
+to ~.source.md~ yourself.  Note that ~--[no-]comments~ doesn't make
+much sense when initializing existing skills.
+
+** Deploy a skill
 #+begin_src shell
-  skill-shed deploy <skill-directory>
+  skill-shed deploy [ <skill-directory> ]
 #+end_src
+Copy the skill's file(s) from the ~<skill-directory>~ (the current
+directory by default) to ~TARGET_DIRECTORY~, stripping comments from
+every encountered ~.source.md~ file.
 
 * Development
-
+- ~npm ci~ to populate ~./node_modules~
 - ~npm test~ to run tests
 - ~npm run typecheck~ to check typing
 - ~npm run lint~ to Eslint-check the source code
