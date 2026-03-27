@@ -1,16 +1,17 @@
 // * Imports
 import {mkdir, readFile, readdir, writeFile} from 'node:fs/promises'
 import {resolve, basename} from 'node:path'
-import {homedir} from 'node:os'
 import {strip_html_comments} from './strip-html-comments.ts'
 import {find_target_conflicts} from './manifest.ts'
+import {load_global_config} from './global-config.ts'
 
 // * init
 export async function init(skill_dir: string, deploy_dir_arg?: string, comments_mode: boolean | null = null): Promise<void> {
 	const skill_name = basename(skill_dir)
+	const config = await load_global_config()
 	const deploy_dir = deploy_dir_arg
 		? resolve(deploy_dir_arg)
-		: resolve(homedir(), '.claude', 'skills', skill_name)
+		: resolve(config.default_target_directory, skill_name)
 
 	await mkdir(skill_dir, {recursive: true})
 

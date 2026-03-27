@@ -11,6 +11,7 @@ import {join, resolve, dirname, basename} from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {strip_html_comments} from '../src/strip-html-comments.ts'
 import {build_manifest_from_dir, validate_manifest, find_target_conflicts, target_filename} from '../src/manifest.ts'
+import {load_global_config} from '../src/global-config.ts'
 
 const exec_file = promisify(execFile)
 const script = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'skill-shed.ts')
@@ -19,10 +20,13 @@ const script = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'sk
 
 interface Run_result {stdout: string, stderr: string, code: number}
 
-async function run_init(skill_dir: string, deploy_dir?: string, flags: string[] = []): Promise<Run_result> {
+interface Run_init_options {env?: NodeJS.ProcessEnv}
+
+async function run_init(skill_dir: string, deploy_dir?: string, flags: string[] = [], options: Run_init_options = {}): Promise<Run_result> {
 	const extra_args = deploy_dir ? [deploy_dir] : []
+	const env = options.env ?? process.env
 	try {
-		const result = await exec_file('node', [script, 'init', skill_dir, ...extra_args, ...flags])
+		const result = await exec_file('node', [script, 'init', skill_dir, ...extra_args, ...flags], {env})
 		return {stdout: result.stdout, stderr: result.stderr, code: 0}
 	} catch (e: unknown) {
 		const err = e as {stdout?: string, stderr?: string, code?: number}
@@ -56,14 +60,15 @@ const MY_SKILL_SOURCE_CONTENT = [
 	'description: >',
 	'  What this skill does – generates files?  Executes shell scripts?',
 	'  Sends HTTP requests?  When to use it – when the user asks or',
-	'  mentions something?  Uploads a file of specific type?',
+	'  mentions something?  Uploads a file of specific type?  Fill the',
+	'  details in here.',
 	'allowed-tools: Read, Bash(rg *)',
 	'---',
 	'',
 	'<!-- NOTE: HTML comments are stripped on skill deployment, except',
 	'     inside code blocks.  To disable stripping for a file, remove',
 	'     `.source` from its name.  For example, to disable stripping',
-	'     here, rename this file from SKILL.source.md to SKILL.md.     -->',
+	'     here, rename this file from `SKILL.source.md` to `SKILL.md`. -->',
 	'',
 	'# My-skill skill',
 ].join('\n')
@@ -74,7 +79,8 @@ const MY_SKILL_CONTENT = [
 	'description: >',
 	'  What this skill does – generates files?  Executes shell scripts?',
 	'  Sends HTTP requests?  When to use it – when the user asks or',
-	'  mentions something?  Uploads a file of specific type?',
+	'  mentions something?  Uploads a file of specific type?  Fill the',
+	'  details in here.',
 	'allowed-tools: Read, Bash(rg *)',
 	'---',
 	'',
@@ -342,6 +348,49 @@ test('init: default deploy dir is ~/.claude/skills/<skill-name>', async () => {
 	)
 	const files = await readdir(skill_dir)
 	assert.deepStrictEqual(files.sort(), ['.env', 'SKILL.source.md'])
+})
+
+test('init: falls back to ~/.claude/skills when global config is absent', async () => {
+	const parent = await make_tmp_dir()
+	const skill_dir = join(parent, 'my-skill')
+	const nonexistent_config = join(await make_tmp_dir(), 'nonexistent.json')
+	const env = {...process.env, SKILL_SHED_CONFIG: nonexistent_config}
+
+	const result = await run_init(skill_dir, undefined, [], {env})
+
+	assert.strictEqual(result.code, 0)
+	const env_content = await readFile(join(skill_dir, '.env'), 'utf8')
+	assert.strictEqual(env_content.trim(), `TARGET_DIRECTORY=${resolve(homedir(), '.claude', 'skills', 'my-skill')}`)
+})
+
+test('init: uses default_target_directory from global config when no deploy_dir given', async () => {
+	const parent = await make_tmp_dir()
+	const skill_dir = join(parent, 'my-skill')
+	const base_dir = await make_tmp_dir()
+	const config_file = join(await make_tmp_dir(), 'skill-shed.env')
+	await writeFile(config_file, `DEFAULT_TARGET_DIRECTORY=${base_dir}\n`)
+	const env = {...process.env, SKILL_SHED_CONFIG: config_file}
+
+	const result = await run_init(skill_dir, undefined, [], {env})
+
+	assert.strictEqual(result.code, 0)
+	const env_content = await readFile(join(skill_dir, '.env'), 'utf8')
+	assert.strictEqual(env_content.trim(), `TARGET_DIRECTORY=${join(base_dir, 'my-skill')}`)
+})
+
+test('init: explicit deploy_dir overrides global config', async () => {
+	const parent = await make_tmp_dir()
+	const skill_dir = join(parent, 'my-skill')
+	const explicit_dir = await make_tmp_dir()
+	const config_file = join(await make_tmp_dir(), 'skill-shed.env')
+	await writeFile(config_file, 'DEFAULT_TARGET_DIRECTORY=/should/not/be/used\n')
+	const env = {...process.env, SKILL_SHED_CONFIG: config_file}
+
+	const result = await run_init(skill_dir, explicit_dir, [], {env})
+
+	assert.strictEqual(result.code, 0)
+	const env_content = await readFile(join(skill_dir, '.env'), 'utf8')
+	assert.strictEqual(env_content.trim(), `TARGET_DIRECTORY=${explicit_dir}`)
 })
 
 // ** Deploy
@@ -846,4 +895,54 @@ test('validate_manifest: throws when no SKILL.md target present', () => {
 
 test('validate_manifest: throws on empty manifest', () => {
 	assert.throws(() => validate_manifest([]), new Error('No entry targets SKILL.md'))
+})
+
+// ** load_global_config
+
+test('load_global_config: missing config file returns defaults', async () => {
+	const nonexistent = join(await make_tmp_dir(), 'nonexistent.json')
+	process.env.SKILL_SHED_CONFIG = nonexistent
+	try {
+		const config = await load_global_config()
+		assert.strictEqual(config.default_target_directory, resolve(homedir(), '.claude', 'skills'))
+	} finally {
+		delete process.env.SKILL_SHED_CONFIG
+	}
+})
+
+test('load_global_config: reads DEFAULT_TARGET_DIRECTORY from config file', async () => {
+	const config_file = join(await make_tmp_dir(), 'skill-shed.env')
+	await writeFile(config_file, 'DEFAULT_TARGET_DIRECTORY=/some/path\n')
+	process.env.SKILL_SHED_CONFIG = config_file
+	try {
+		const config = await load_global_config()
+		assert.strictEqual(config.default_target_directory, '/some/path')
+	} finally {
+		delete process.env.SKILL_SHED_CONFIG
+	}
+})
+
+test('load_global_config: ignores unknown keys', async () => {
+	const config_file = join(await make_tmp_dir(), 'skill-shed.env')
+	await writeFile(config_file, 'DEFAULT_TARGET_DIRECTORY=/p\nUNKNOWN_KEY=42\n')
+	process.env.SKILL_SHED_CONFIG = config_file
+	try {
+		const config = await load_global_config()
+		assert.strictEqual(config.default_target_directory, '/p')
+		assert.ok(!('UNKNOWN_KEY' in config))
+	} finally {
+		delete process.env.SKILL_SHED_CONFIG
+	}
+})
+
+test('load_global_config: empty DEFAULT_TARGET_DIRECTORY falls back to default', async () => {
+	const config_file = join(await make_tmp_dir(), 'skill-shed.env')
+	await writeFile(config_file, 'DEFAULT_TARGET_DIRECTORY=\n')
+	process.env.SKILL_SHED_CONFIG = config_file
+	try {
+		const config = await load_global_config()
+		assert.strictEqual(config.default_target_directory, resolve(homedir(), '.claude', 'skills'))
+	} finally {
+		delete process.env.SKILL_SHED_CONFIG
+	}
 })

@@ -153,14 +153,36 @@ If the skill directory contains files other than ~SKILL.md~ (or
 directory, but ~reference.source.md~ would have its comments stripped
 and filename shortened to ~reference.md~.
 
-** Configure
-As of now, the only setting is ~TARGET_DIRECTORY~ in the ~.env~ file
-in every skill's directory:
+** Configuration
+~skill-shed~ uses a "global" configuration file at
+=~/.skill-shed.env=.  (If you don't like that name, point the
+environment variable ~SKILL_SHED_CONFIG~ to where you want your config
+to live.)  As of now, the only setting there is
+~DEFAULT_TARGET_DIRECTORY~.  For example, if you use [[https://openai.com/codex/][Codex]] or [[https://geminicli.com/][Gemini
+CLI]], your config should look like this:
+#+begin_src shell
+  DEFAULT_TARGET_DIRECTORY=~/.agents/skills
+#+end_src
+If you use [[https://github.com/features/copilot][Copilot]], you can use
+#+begin_src shell
+  DEFAULT_TARGET_DIRECTORY=~/.copilot/skills
+#+end_src
+And if you use [[https://claude.com/product/claude-code][Claude Code]], you may set
+#+begin_src shell
+  DEFAULT_TARGET_DIRECTORY=~/.claude/skills
+#+end_src
+or not create the config at all (since I use Claude, this is the
+default).
+
+Apart from that, every skill managed by ~skill-shed~ has its own
+little config – the ~.env~ file in the skill's directory.  Like with
+the global config, the only setting there is ~TARGET_DIRECTORY~:
 #+begin_src shell
   TARGET_DIRECTORY=~/.your_favorite_coding_agent/skills/my-useful-skill
 #+end_src
-The target directory is normally populated by ~skill-shed init~, but
-can be changed anytime.
+The target directory is normally populated by ~skill-shed init~ based
+on the ~DEFAULT_TARGET_DIRECTORY~ mentioned above, but it can be
+changed anytime even without touching the default.
 
 * Development
 - ~npm ci~ to populate ~./node_modules~

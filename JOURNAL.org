@@ -5,6 +5,28 @@ A set of tools (in the form of a Node.js CLI script) for managing
 agent skills: format conversion, comment stripping, linting,
 deployment.  Currently in WiP/PoC stage.
 
+* TODO `config` subcommand
+Print the effective resolved configuration to stdout (values active
+right now, including compiled-in defaults when =~/.skill-shed.env= is
+absent or a setting is unset).
+
+** Steps [/]
+- [ ] Implement =skill-shed config=: print effective config to stdout
+- [ ] Mention =~/.skill-shed.env= path and format in =help= output
+- [ ] Add tests for =config= output
+** Decisions
+*** [2026-03-27] – Read-only =config=; no write path
+**** Reason
+The config file is plain dotenv — trivially hand-editable.  A write
+path (=config set KEY VALUE=) adds implementation cost for no real
+benefit.  A read path is useful for confirming the effective value
+after fallback from an absent or empty config, and for discoverability.
+**** Alternatives considered
+- Full read/write =config= subcommand: write path not worth the cost.
+- Drop entirely: leaves no CLI way to discover the config file or
+  inspect effective values — a discoverability gap for new users.
+** Session log
+
 * TODO Improve `strip_html_comments` test coverage
 Add missing test cases identified by static analysis against the
 CommonMark spec.
@@ -277,20 +299,45 @@ command, and document installation clearly in the README.
 ** Decisions
 ** Session log
 
-* TODO Global config file
-Support a global config file (e.g. =~/.skill-shed.config.json=) for
+* DONE Global config file
+:LOGBOOK:
+- State "DONE"       from "INPROGRESS" [2026-03-27 Fri 16:44]
+- State "INPROGRESS" from "TODO"       [2026-03-27 Fri 15:22]
+:END:
+Support a global config file (=~/.skill-shed.env=, dotenv format) for
 user-level settings that apply across all skills, such as the default
 skills directory.  Decouples the tool from any specific AI vendor's
 directory layout.
 
-** Steps [/]
-- [ ] Define config file location and format (JSON, path: =~/.skill-shed.config.json=)
-- [ ] Load and parse config at startup; ignore missing file (no config = defaults)
-- [ ] Support =default_target_directory= setting: overrides the default =~/.claude/skills/= base path used by =init=
-- [ ] Add =config= subcommand or flag to set/show config values from the CLI
-- [ ] Document config file format in README and =help= output
-- [ ] Add tests for config loading, fallback to defaults, and override behaviour
+** Steps [5/5]
+- [X] Define config file location and format (dotenv, path: =~/.skill-shed.env=)
+- [X] Load and parse config at startup; ignore missing file (no config = defaults)
+- [X] Support =DEFAULT_TARGET_DIRECTORY= setting: overrides the default =~/.claude/skills/= base path used by =init=
+- [X] Document config file format in README and =help= output
+- [X] Add tests for config loading, fallback to defaults, and override behaviour
 ** Decisions
+*** [2026-03-27] – Global config file named =~/.skill-shed.env=
+**** Reason
+=.env= extension signals dotenv format, matches editor syntax highlighting,
+and is consistent with the per-skill =.env= already in use.  Avoids the
+directory/file collision risk of =~/.skill-shed= and the ambiguity of
+=~/.skill-shedrc=.  XDG path considered but rejected as over-engineering
+for now.
+**** Alternatives considered
+- =~/.skill-shed=: no format signal, forecloses directory option.
+- =~/.skill-shedrc=: rc suffix is conventional but doesn't signal dotenv.
+- =~/.config/skill-shed/config= (XDG): correct long-term but adds complexity.
+
+*** [2026-03-27] – Use dotenv format for global config file, not JSON
+**** Reason
+Dotenv parser is already in use for per-skill =.env=; using the same format
+for the global config gives a single mental model and a single parser.
+JSON is hostile to hand-editing (no comments, strict syntax, easy parse
+errors) and reads as machine-generated — wrong for a file users edit directly.
+**** Alternatives considered
+- Keep JSON: rejected — bad for hand-editing, creates two formats for the same
+  kind of information (tool config).
+- TOML: rejected — requires a new dependency; dotenv already covers the need.
 ** Session log
 
 * INPROGRESS Multi-file skill support
