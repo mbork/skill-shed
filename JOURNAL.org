@@ -339,6 +339,15 @@ errors) and reads as machine-generated — wrong for a file users edit directly.
   kind of information (tool config).
 - TOML: rejected — requires a new dependency; dotenv already covers the need.
 ** Session log
+*** [2026-03-27]
+- Completed: `src/global-config.ts` (`load_global_config`, dotenv format, `~/.skill-shed.env`,
+  `DEFAULT_TARGET_DIRECTORY`); `src/init.ts` updated to use it; README Configuration section
+  rewritten; 7 tests added; `eslint.config.mts` fixed for tab indentation; committed
+- In progress: NONE
+- Next: mark feature DONE; consider starting `config` subcommand or `Help/usage messages`
+- Blockers: NONE
+- Decisions: all logged above (dotenv format; `~/.skill-shed.env` name; `config` subcommand
+  split into its own feature; no write path for `config`)
 
 * INPROGRESS Multi-file skill support
 :LOGBOOK:
