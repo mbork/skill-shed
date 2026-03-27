@@ -1,4 +1,4 @@
-#+TITLE: Skill shed – a shed of tools for managing agent skills
+#+TITLE: Skill shed – a 𝒔𝒉𝒆𝒅😉 of tools for managing agent skills
 #+AUTHOR: Marcin Borkowski
 
 * Problem statement
@@ -50,7 +50,8 @@ sustainable:
 This project aims to solve these problems.  Currently, it is in very
 early stage and only the solutions to the first two (version control
 in a separate directory and comment stripping) are implemented, but
-I'm working on the third and fourth ones and have a plan for the rest.
+I'm working on giving the user control over what version is deployed
+and guarding against silent overwriting files in the target directory.
 
 * Prerequisites
 Currently only Node.js 24+.
@@ -74,10 +75,32 @@ the installation will become much simpler.
 #+begin_src shell
   skill-shed init my-useful-skill
 #+end_src
-creates a directory ~my-useful-skill~ with two files: ~.env~ (defining
-the ~TARGET_DIRECTORY~, see below) and ~SKILL.source.md~, containing
-a template skill frontmatter, a HTML comment and a stub to fill with
-the skill's contents.  Edit them to your liking and say
+creates a directory ~my-useful-skill~ with two files: ~.env~ (see
+/Configure/ below) and ~SKILL.source.md~, containing a template skill
+frontmatter, a HTML comment and a stub to fill with the skill's
+contents:
+#+begin_example
+  ---
+  name: {{name}}
+  description: >
+    What this skill does – generates files?  Executes shell scripts?
+    Sends HTTP requests?  When to use it – when the user asks or
+    mentions something?  Uploads a file of specific type?  Fill the
+    details in here.
+  allowed-tools: Read, Bash(rg *)
+  ---
+
+  <!-- NOTE: HTML comments are stripped on skill deployment, except
+       inside code blocks.  To disable stripping for a file, remove
+       `.source` from its name.  For example, to disable stripping
+       here, rename this file from `SKILL.source.md` to `SKILL.md`. -->
+
+  # {{Name}} skill
+#+end_example
+
+Edit them to your liking.  You can also create more files – either
+ending in ~.source.md~ (in which case they'll have their comments
+stripped, too) or anything else (~.md~, ~.txt~, ~.json~, ...) and say
 #+begin_src shell
   skill-shed deploy my-useful-skill
 #+end_src
@@ -85,20 +108,20 @@ in the same directory where you issued the ~init~ command, or just
 #+begin_src shell
   skill-shed deploy
 #+end_src
-in the newly created skill's directory – and your skill will be copied
-to ~TARGET_DIRECTORY~, renamed to ~SKILL.md~ and with the comment
-stripped.
+in the newly created skill's directory – and all your skill's files
+will be copied to the target directory (=~/.claude/skills= by default,
+see /Configure/ below), with all files ending in ~.source.md~ renamed
+to ~.md~ and with the comments stripped.
 
 * Usage
 ** Initialize a skill directory
 #+begin_src shell
   skill-shed init [ <skill-directory> ] [ <deploy-directory> ] [ --comments | --no-comments ]
 #+end_src
-If ~<deploy-directory>~ is not supplied, skills will be deployed under
-=~/.claude/skills=.  (This will be made configurable soon.)  The
-~<deploy-directory>~ is copied to ~.env~ in the ~<skill-directory>~
-(the current directory by default) and can be changed at any point in
-time.
+If ~<skill-directory>~ is not supplied, current directory is assumed.
+If ~<deploy-directory>~ is supplied, it is copied to ~.env~ in the
+~<skill-directory>~; otherwise, the skill will be deployed under the
+default target directory (see /Configure/ below).
 
 If ~--comments~ is issued (the default), a file called
 ~SKILL.source.md~ containing a generic template will be created in
@@ -120,8 +143,24 @@ much sense when initializing existing skills.
   skill-shed deploy [ <skill-directory> ]
 #+end_src
 Copy the skill's file(s) from the ~<skill-directory>~ (the current
-directory by default) to ~TARGET_DIRECTORY~, stripping comments from
-every encountered ~.source.md~ file.
+directory by default) to ~TARGET_DIRECTORY~, stripping comments (and
+the ~.source~ part of the filename) from every encountered
+~.source.md~ file.
+
+If the skill directory contains files other than ~SKILL.md~ (or
+~SKILL.source.md~), they are treated in a similar way.  For example,
+~reference.md~ or ~data.csv~ would be copied verbatim to the target
+directory, but ~reference.source.md~ would have its comments stripped
+and filename shortened to ~reference.md~.
+
+** Configure
+As of now, the only setting is ~TARGET_DIRECTORY~ in the ~.env~ file
+in every skill's directory:
+#+begin_src shell
+  TARGET_DIRECTORY=~/.your_favorite_coding_agent/skills/my-useful-skill
+#+end_src
+The target directory is normally populated by ~skill-shed init~, but
+can be changed anytime.
 
 * Development
 - ~npm ci~ to populate ~./node_modules~
