@@ -8,6 +8,7 @@ export default ts_eslint.config(
 	{
 		rules: {
 			'@stylistic/indent': ['error', 'tab'],
+			'@stylistic/indent-binary-ops': ['error', 'tab'],
 			'@stylistic/no-tabs': ['error', {allowIndentationTabs: true}],
 			'@stylistic/object-curly-spacing': ['error', 'never'],
 			'@stylistic/brace-style': ['error', '1tbs'],
