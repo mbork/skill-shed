@@ -2,7 +2,7 @@
 import {readFile} from 'node:fs/promises'
 import {resolve} from 'node:path'
 import {homedir} from 'node:os'
-import {parse as dotenv_parse} from 'dotenv'
+import {parseEnv} from 'node:util'
 
 // * Types
 export interface Global_config {
@@ -20,7 +20,7 @@ export async function load_global_config(): Promise<Global_config> {
 		?? resolve(homedir(), '.skill-shed.env')
 	try {
 		const raw = await readFile(config_path, 'utf8')
-		const parsed = dotenv_parse(raw)
+		const parsed = parseEnv(raw)
 		return {
 			default_target_directory: parsed.DEFAULT_TARGET_DIRECTORY
 				|| DEFAULT_CONFIG.default_target_directory,

@@ -1,7 +1,7 @@
 // * Imports
 import {mkdir, readFile, writeFile} from 'node:fs/promises'
 import {resolve} from 'node:path'
-import {parse as dotenv_parse} from 'dotenv'
+import {parseEnv} from 'node:util'
 import {build_manifest_from_dir, validate_manifest} from './manifest.ts'
 import {collect_overwrite_violations, hash_content, read_sidecar, write_sidecar} from './sidecar.ts'
 
@@ -21,7 +21,7 @@ async function read_target_dir(skill_dir: string): Promise<string> {
 		}
 		process.exit(1)
 	}
-	const env = dotenv_parse(env_content)
+	const env = parseEnv(env_content)
 
 	const target_dir = env.TARGET_DIRECTORY
 	if (!target_dir) {
