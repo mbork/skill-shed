@@ -48,10 +48,10 @@ sustainable:
   ~SKILL.md~, most probably confusing your editor.
 
 This project aims to solve these problems.  Currently, it is in very
-early stage and only the solutions to the first two (version control
-in a separate directory and comment stripping) are implemented, but
-I'm working on giving the user control over what version is deployed
-and guarding against silent overwriting files in the target directory.
+early stage and only the solutions to some of these problems (version
+control in a separate directory, comment stripping, guard against
+accidental modifications in the target directory) are implemented, but
+I'm working on the rest.
 
 * Prerequisites
 Currently only Node.js 24+.

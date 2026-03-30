@@ -12,6 +12,7 @@ import {fileURLToPath} from 'node:url'
 import {strip_html_comments} from '../src/strip-html-comments.ts'
 import {build_manifest_from_dir, validate_manifest, find_target_conflicts, target_filename} from '../src/manifest.ts'
 import {load_global_config} from '../src/global-config.ts'
+import {hash_content, SIDECAR_FILENAME} from '../src/sidecar.ts'
 
 const exec_file = promisify(execFile)
 const script = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'skill-shed.ts')
@@ -34,11 +35,12 @@ async function run_init(skill_dir: string, deploy_dir?: string, flags: string[] 
 	}
 }
 
-async function run_deploy(skill_dir: string, options: {cwd?: string} = {}): Promise<Run_result> {
+async function run_deploy(skill_dir: string, options: {cwd?: string, flags?: string[]} = {}): Promise<Run_result> {
 	const env = {...process.env}
 	delete env.TARGET_DIRECTORY
+	const flags = options.flags ?? []
 	try {
-		const result = await exec_file('node', [script, 'deploy', skill_dir], {env, cwd: options.cwd})
+		const result = await exec_file('node', [script, 'deploy', skill_dir, ...flags], {env, cwd: options.cwd})
 		return {stdout: result.stdout, stderr: result.stderr, code: 0}
 	} catch (e: unknown) {
 		const err = e as {stdout?: string, stderr?: string, code?: number}
@@ -521,7 +523,7 @@ test('deploy: multi-file skill deploys all non-dotfiles', async () => {
 	const deployed_reference = await readFile(join(target_dir, 'reference.md'), 'utf8')
 	assert.strictEqual(deployed_reference, '# Reference\nSome reference.\n')
 	const target_files = await readdir(target_dir)
-	assert.deepStrictEqual(target_files.sort(), ['SKILL.md', 'reference.md'])
+	assert.deepStrictEqual(target_files.sort(), [SIDECAR_FILENAME, 'SKILL.md', 'reference.md'])
 })
 
 test('deploy: only .source.md files have comments stripped', async () => {
@@ -554,7 +556,7 @@ test('deploy: non-SKILL .source.md file has comments stripped alongside SKILL.so
 	assert.strictEqual(deployed_skill, '# Skill\nContent.\n')
 	const deployed_reference = await readFile(join(target_dir, 'reference.md'), 'utf8')
 	assert.strictEqual(deployed_reference, '# Ref\nRef content.\n')
-	assert.deepStrictEqual((await readdir(target_dir)).sort(), ['SKILL.md', 'reference.md'])
+	assert.deepStrictEqual((await readdir(target_dir)).sort(), [SIDECAR_FILENAME, 'SKILL.md', 'reference.md'])
 })
 
 test('deploy: non-SKILL .source.md has comments stripped when SKILL.md is a pass-through', async () => {
@@ -571,7 +573,96 @@ test('deploy: non-SKILL .source.md has comments stripped when SKILL.md is a pass
 	assert.strictEqual(deployed_skill, '# Skill\n<!-- keep -->\nContent.\n')
 	const deployed_reference = await readFile(join(target_dir, 'reference.md'), 'utf8')
 	assert.strictEqual(deployed_reference, '# Ref\nRef content.\n')
-	assert.deepStrictEqual((await readdir(target_dir)).sort(), ['SKILL.md', 'reference.md'])
+	assert.deepStrictEqual((await readdir(target_dir)).sort(), [SIDECAR_FILENAME, 'SKILL.md', 'reference.md'])
+})
+
+// *** Deploy: sidecar
+
+test('deploy: sidecar written after first deploy', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	const content = '# My skill\n'
+	await writeFile(join(skill_dir, 'SKILL.md'), content)
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+
+	const result = await run_deploy(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	const sidecar_raw = await readFile(join(target_dir, SIDECAR_FILENAME), 'utf8')
+	const sidecar = JSON.parse(sidecar_raw)
+	assert.strictEqual(sidecar.version, 1)
+	assert.strictEqual(sidecar.files['SKILL.md'], hash_content(content))
+})
+
+test('deploy: second deploy with unchanged target succeeds', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	const content = '# My skill\n'
+	await writeFile(join(skill_dir, 'SKILL.md'), content)
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+
+	await run_deploy(skill_dir)
+	const result = await run_deploy(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+})
+
+test('deploy: aborts when target was directly edited after last deploy', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), '# My skill\n')
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+
+	await run_deploy(skill_dir)
+	await writeFile(join(target_dir, 'SKILL.md'), '# edited directly\n')
+	const result = await run_deploy(skill_dir)
+
+	assert.strictEqual(result.code, 1)
+	assert.match(result.stderr, /SKILL\.md.*modified after last deploy/)
+})
+
+test('deploy: --force overwrites directly edited target', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	const content = '# My skill\n'
+	await writeFile(join(skill_dir, 'SKILL.md'), content)
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+
+	await run_deploy(skill_dir)
+	await writeFile(join(target_dir, 'SKILL.md'), '# edited directly\n')
+	const result = await run_deploy(skill_dir, {flags: ['--force']})
+
+	assert.strictEqual(result.code, 0)
+	const deployed = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
+	assert.strictEqual(deployed, content)
+})
+
+test('deploy: aborts when target file has no sidecar entry', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), '# My skill\n')
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+	await writeFile(join(target_dir, 'SKILL.md'), '# pre-existing\n')
+
+	const result = await run_deploy(skill_dir)
+
+	assert.strictEqual(result.code, 1)
+	assert.match(result.stderr, /SKILL\.md.*not deployed by skill-shed/)
+})
+
+test('deploy: --force overwrites file with no sidecar entry', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	const content = '# My skill\n'
+	await writeFile(join(skill_dir, 'SKILL.md'), content)
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+	await writeFile(join(target_dir, 'SKILL.md'), '# pre-existing\n')
+
+	const result = await run_deploy(skill_dir, {flags: ['--force']})
+
+	assert.strictEqual(result.code, 0)
+	const deployed = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
+	assert.strictEqual(deployed, content)
 })
 
 // ** strip_html_comments

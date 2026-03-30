@@ -373,10 +373,10 @@ Support deploying skills that consist of more than one file.
 - [[*Skill deployment]]
 - [[*Skill comment stripping]]
 
-** Steps [2/11]
+** Steps [3/11]
 - [X] Implement ~build_manifest_from_dir~: ~readdir~ + dotfile filter, returns ~Map<string, Buffer|string>~
 - [X] Implement `*.source.md` → `*.md` comment stripping for all files in the manifest
-- [ ] Implement sidecar read/write and per-file overwrite check (absent/owned/unowned cases)
+- [X] Implement sidecar read/write and per-file overwrite check (absent/owned/unowned cases)
 - [ ] Decide and implement atomicity strategy on partial failure
 - [ ] Implement stale-file policy: delete owned files, abort on unowned files
 - [ ] Replace ~build_manifest_from_dir~ with ~build_manifest_from_git~ (`git ls-files --exclude-standard` + MANIFEST_CMD fallback)
@@ -386,6 +386,41 @@ Support deploying skills that consist of more than one file.
 - [ ] Implement DEPLOY_DOTFILES whitelist in .env
 - [ ] Check config consistency (DEPLOY_DOTFILES lists untracked file; MANIFEST_CMD command not on $PATH)
 ** Decisions
+*** [2026-03-30] – Atomicity: sentinel file approach; no write-to-temp-then-rename
+**** Reason
+A crash mid-write-loop leaves some target files at new content and some at old,
+with the sidecar still recording old hashes — spurious hash-mismatch error on
+next deploy.  Fix: write a ~.skill-shed-deploy-in-progress~ sentinel at the
+start of the write loop, delete it after ~write_sidecar~.  On next deploy,
+~deploy()~ checks for the sentinel before the overwrite check; if present, exits
+with code 1 telling the user to re-run with ~--force~.
+Disk-full failures are considered negligible (skills are small).
+Write-to-temp-then-rename (atomic sidecar write) was considered but rejected:
+it only fixes the case where all file writes succeeded but the sidecar write
+itself was interrupted — a much narrower fix that still leaves the mid-loop
+crash unaddressed.
+**** Alternatives considered
+- Ignore entirely, rely on ~--force~ for recovery: confusing error message gives
+  no hint that interrupted deploy is the cause.
+- Write sidecar first, then files: still produces mismatches (new hashes, old
+  file content after crash).
+- Write to temp then rename (atomic sidecar): only fixes torn-sidecar-write,
+  not mid-loop crash.
+- Write all files to a temp directory, then rename the whole directory into
+  place: truly atomic, but ~rename~ across directories is not atomic on all
+  filesystems, and replacing a live target directory atomically requires
+  platform-specific tricks (~renameat2~ on Linux, not available in Node's
+  ~fs.rename~).  Significant complexity for a tool that deploys small text files.
+- Per-file write-to-temp-then-rename: atomic per file, but does not help if
+  the process crashes between files; target still ends up in a mixed state.
+  More code, same fundamental problem.
+- Revert partially successful deploy on next run: save the previous content of
+  each target file before overwriting, then restore on interrupted-deploy
+  detection.  Truly recovers the pre-deploy state, but requires storing backups
+  of all target files (doubling storage), significantly more code, and adds a
+  new failure mode (crash during the revert itself).  Overkill for small text
+  files where re-deploying with ~--force~ is trivially fast.
+
 *** [2026-03-26] – Manifest is an array of ManifestEntry objects, not a Map
 **** Reason
 Iteration is the dominant operation; lookup by name is rare and only needed
@@ -568,6 +603,19 @@ into one of two cases, distinguishable via the sidecar:
   harder to reason about.
 - Ignore unowned files: silently accumulates cruft.
 ** Session log
+*** [2026-03-30]
+- Completed: step 3 — ~src/sidecar.ts~ with ~hash_content~, ~read_sidecar~,
+  ~write_sidecar~, ~collect_overwrite_violations~; ~deploy()~ updated with
+  pre-flight overwrite check and sidecar write; ~--force~ / ~-f~ flag added;
+  ~read_target_dir~ and ~collect_overwrite_violations~ factored out of ~deploy()~;
+  6 new sidecar tests; user-facing error messages scrubbed of "sidecar"
+- In progress: NONE
+- Next: implement ~.skill-shed-deploy-in-progress~ sentinel in ~deploy()~
+  (write before file loop, delete after ~write_sidecar~; check in ~deploy()~
+  before overwrite check; exit 1 with message to re-run with ~--force~)
+- Blockers: NONE
+- Decisions: sentinel approach chosen for interrupted-deploy detection; full
+  atomicity variants assessed and rejected (all logged in Decisions above)
 *** [2026-03-26] (session 2)
 - Completed: project restructured (TS sources → ~src/~, ~SKILL.template.md~ → ~assets/~); ~init~
   extracted to ~src/init.ts~, ~deploy~ to ~src/deploy.ts~, ~skill-shed.ts~ is now a thin dispatcher;

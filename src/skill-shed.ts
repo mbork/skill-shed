@@ -20,6 +20,7 @@ function parse_args(raw_args: string[]): {
 	second_arg: string | undefined
 	third_arg: string | undefined
 	comments_mode: boolean | null
+	is_force: boolean
 } {
 	const {positionals, values} = parseArgs({
 		args: raw_args,
@@ -27,6 +28,7 @@ function parse_args(raw_args: string[]): {
 		options: {
 			'comments': {type: 'boolean'},
 			'no-comments': {type: 'boolean'},
+			'force': {type: 'boolean', short: 'f'},
 		},
 	})
 
@@ -41,8 +43,9 @@ function parse_args(raw_args: string[]): {
 		process.exit(1)
 	}
 	const comments_mode = values.comments ? true : values['no-comments'] ? false : null
+	const is_force = values.force ?? false
 
-	return {command, second_arg, third_arg, comments_mode}
+	return {command, second_arg, third_arg, comments_mode, is_force}
 }
 
 // * dispatch
@@ -51,6 +54,7 @@ async function dispatch(
 	second_arg: string | undefined,
 	third_arg: string | undefined,
 	comments_mode: boolean | null,
+	is_force: boolean,
 ): Promise<void> {
 	if (command === 'help') {
 		help_and_exit(second_arg)
@@ -61,7 +65,7 @@ async function dispatch(
 	if (command === 'init') {
 		await init(skill_dir, third_arg, comments_mode)
 	} else if (command === 'deploy') {
-		await deploy(skill_dir)
+		await deploy(skill_dir, is_force)
 	} else {
 		help_and_exit(command)
 	}
@@ -76,8 +80,8 @@ async function main(): Promise<void> {
 		handle_help_flag(raw_args)
 	}
 
-	const {command, second_arg, third_arg, comments_mode} = parse_args(raw_args)
-	await dispatch(command, second_arg, third_arg, comments_mode)
+	const {command, second_arg, third_arg, comments_mode, is_force} = parse_args(raw_args)
+	await dispatch(command, second_arg, third_arg, comments_mode, is_force)
 }
 
 if (import.meta.main) {
