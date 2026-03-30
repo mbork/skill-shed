@@ -5,11 +5,24 @@ import {resolve} from 'node:path'
 import {parseArgs} from 'node:util'
 import {init} from './init.ts'
 import {deploy} from './deploy.ts'
+import {help_and_exit} from './help.ts'
 
-// * main
-async function main(): Promise<void> {
+// * handle_help_flag
+function handle_help_flag(raw_args: string[]): void {
+	// lightweight parsing of arguments is enough here
+	const positionals = raw_args.filter(a => !a.startsWith('-'))
+	help_and_exit(positionals[0])
+}
+
+// * parse_args
+function parse_args(raw_args: string[]): {
+	command: string
+	second_arg: string | undefined
+	third_arg: string | undefined
+	comments_mode: boolean | null
+} {
 	const {positionals, values} = parseArgs({
-		args: process.argv.slice(2),
+		args: raw_args,
 		allowPositionals: true,
 		options: {
 			'comments': {type: 'boolean'},
@@ -17,15 +30,11 @@ async function main(): Promise<void> {
 		},
 	})
 
-	const [command, skill_dir_arg] = positionals
+	const [command, second_arg, third_arg] = positionals
 
 	if (!command) {
-		console.error('Usage: skill-shed <command> [skill-dir]')
-		console.error('Commands: init, deploy')
-		process.exit(1)
+		help_and_exit(undefined)
 	}
-
-	const skill_dir = skill_dir_arg ? resolve(skill_dir_arg) : process.cwd()
 
 	if (values.comments && values['no-comments']) {
 		console.error('Error: --comments and --no-comments are mutually exclusive')
@@ -33,14 +42,42 @@ async function main(): Promise<void> {
 	}
 	const comments_mode = values.comments ? true : values['no-comments'] ? false : null
 
+	return {command, second_arg, third_arg, comments_mode}
+}
+
+// * dispatch
+async function dispatch(
+	command: string,
+	second_arg: string | undefined,
+	third_arg: string | undefined,
+	comments_mode: boolean | null,
+): Promise<void> {
+	if (command === 'help') {
+		help_and_exit(second_arg)
+	}
+
+	const skill_dir = second_arg ? resolve(second_arg) : process.cwd()
+
 	if (command === 'init') {
-		await init(skill_dir, positionals[2], comments_mode)
+		await init(skill_dir, third_arg, comments_mode)
 	} else if (command === 'deploy') {
 		await deploy(skill_dir)
 	} else {
-		console.error(`Unknown command: ${command}`)
-		process.exit(1)
+		help_and_exit(command)
 	}
+}
+
+// * main
+async function main(): Promise<void> {
+	const raw_args = process.argv.slice(2)
+
+	const is_help_flag = raw_args.includes('--help') || raw_args.includes('-h')
+	if (is_help_flag) {
+		handle_help_flag(raw_args)
+	}
+
+	const {command, second_arg, third_arg, comments_mode} = parse_args(raw_args)
+	await dispatch(command, second_arg, third_arg, comments_mode)
 }
 
 if (import.meta.main) {

@@ -199,16 +199,20 @@ are written.  Applies to all format combinations, not just .org vs .md.
   like .md sources?
 ** Session log
 
-* TODO Help/usage messages
+* DONE Help/usage messages
+:LOGBOOK:
+- State "DONE"       from "INPROGRESS" [2026-03-30 Mon 13:06]
+- State "INPROGRESS" from "TODO"       [2026-03-27 Fri 16:45]
+:END:
 Add a general usage message (printed when no command is given or when
 `help` is the command) and per-command help messages (printed via
 `help <command>`).
 
 ** Steps [/]
-- [ ] Add `help` command: print general usage listing all commands with one-line descriptions
-- [ ] Add per-command help: `help deploy`, `help init` print detailed usage for that command
-- [ ] Replace the current inline usage strings with calls to the new help functions
-- [ ] Support `--help` / `-h` flag as an alias for the `help` command
+- [X] Add `help` command: print general usage listing all commands with one-line descriptions
+- [X] Add per-command help: `help deploy`, `help init` print detailed usage for that command
+- [X] Replace the current inline usage strings with calls to the new help functions
+- [X] Support `--help` / `-h` flag as an alias for the `help` command
 ** Decisions
 *** [2026-03-26] – Implement both `help` subcommand and `--help` / `-h` flag
 **** Reason
@@ -240,6 +244,15 @@ A bare synopsis (`Usage: skill-shed <command>`) is not enough for a stranger
 to understand what the tool does.  A one-paragraph description plus a
 one-line summary per command makes the tool self-documenting at the terminal.
 ** Session log
+*** [2026-03-30]
+- Completed: `src/help.ts` (help texts, `help_and_exit`, `print_command_help`, `is_known_command`);
+  `src/skill-shed.ts` refactored (`main` split into `handle_help_flag`, `parse_args`, `dispatch`;
+  all unknown-command/help branches consolidated via `help_and_exit`); 5 subprocess tests added;
+  all 4 steps done
+- In progress: NONE
+- Next: mark feature DONE; consider starting `config` subcommand or `Multi-file skill support` step 3
+- Blockers: NONE
+- Decisions: `help_and_exit` extracted to deduplicate help-dispatch logic; no-args now exits 0
 
 * BLOCKED Skill linting
 Lint skill files for common errors before deployment.

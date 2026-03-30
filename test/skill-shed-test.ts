@@ -46,6 +46,16 @@ async function run_deploy(skill_dir: string, options: {cwd?: string} = {}): Prom
 	}
 }
 
+async function run_help(...args: string[]): Promise<Run_result> {
+	try {
+		const result = await exec_file('node', [script, ...args])
+		return {stdout: result.stdout, stderr: result.stderr, code: 0}
+	} catch (e: unknown) {
+		const err = e as {stdout?: string, stderr?: string, code?: number}
+		return {stdout: err.stdout ?? '', stderr: err.stderr ?? '', code: err.code ?? 1}
+	}
+}
+
 async function make_tmp_dir(): Promise<string> {
 	return mkdtemp(join(tmpdir(), 'skill-shed-test-'))
 }
@@ -934,6 +944,40 @@ test('load_global_config: ignores unknown keys', async () => {
 		delete process.env.SKILL_SHED_CONFIG
 	}
 })
+
+// ** Help
+
+test('help: no arguments prints general help', async () => {
+	const result = await run_help()
+	assert.strictEqual(result.code, 0)
+	assert.ok(result.stdout.startsWith('skill-shed - manage and deploy agent skills'))
+})
+
+test('help: `help` command prints general help', async () => {
+	const result = await run_help('help')
+	assert.strictEqual(result.code, 0)
+	assert.ok(result.stdout.startsWith('skill-shed - manage and deploy agent skills'))
+})
+
+test('help: `--help` flag prints general help', async () => {
+	const result = await run_help('--help')
+	assert.strictEqual(result.code, 0)
+	assert.ok(result.stdout.startsWith('skill-shed - manage and deploy agent skills'))
+})
+
+test('help: `help init` prints init help', async () => {
+	const result = await run_help('help', 'init')
+	assert.strictEqual(result.code, 0)
+	assert.ok(result.stdout.startsWith('Usage: skill-shed init'))
+})
+
+test('help: `-h init` prints init help', async () => {
+	const result = await run_help('-h', 'init')
+	assert.strictEqual(result.code, 0)
+	assert.ok(result.stdout.startsWith('Usage: skill-shed init'))
+})
+
+// ** Global config
 
 test('load_global_config: empty DEFAULT_TARGET_DIRECTORY falls back to default', async () => {
 	const config_file = join(await make_tmp_dir(), 'skill-shed.env')
