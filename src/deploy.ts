@@ -3,7 +3,7 @@ import {mkdir, readFile, stat, unlink, writeFile} from 'node:fs/promises'
 import {resolve} from 'node:path'
 import {parseEnv} from 'node:util'
 import {build_manifest_from_dir, validate_manifest} from './manifest.ts'
-import {collect_overwrite_violations, hash_content, read_sidecar, write_sidecar} from './sidecar.ts'
+import {collect_overwrite_violations, collect_stale_violations, find_stale_names, hash_content, read_sidecar, write_sidecar} from './sidecar.ts'
 
 // * Sentinel
 const SENTINEL_FILENAME = '.skill-shed-deploy-in-progress'
@@ -80,9 +80,12 @@ export async function deploy(skill_dir: string, is_force = false): Promise<void>
 
 	const existing_sidecar = await read_sidecar(absolute_target_dir)
 
-	const violations = await collect_overwrite_violations(manifest, absolute_target_dir, existing_sidecar)
-	if (violations.length > 0 && !is_force) {
-		for (const v of violations) {
+	const stale_names = find_stale_names(manifest, existing_sidecar)
+	const stale_violations = await collect_stale_violations(stale_names, absolute_target_dir, existing_sidecar)
+	const overwrite_violations = await collect_overwrite_violations(manifest, absolute_target_dir, existing_sidecar)
+	const all_violations = [...stale_violations, ...overwrite_violations]
+	if (all_violations.length > 0 && !is_force) {
+		for (const v of all_violations) {
 			console.error(`Error: ${v}`)
 		}
 		process.exit(1)
@@ -95,6 +98,19 @@ export async function deploy(skill_dir: string, is_force = false): Promise<void>
 		const target_path = resolve(absolute_target_dir, entry.target_name)
 		await writeFile(target_path, entry.target_content)
 		console.log(`Deployed: ${source_path} -> ${target_path}`)
+	}
+
+	for (const name of stale_names) {
+		const target_path = resolve(absolute_target_dir, name)
+		try {
+			await unlink(target_path)
+			console.log(`Removed stale: ${target_path}`)
+		} catch (e: unknown) {
+			const err = e as NodeJS.ErrnoException
+			if (err.code !== 'ENOENT') {
+				throw e
+			}
+		}
 	}
 
 	const new_sidecar = {version: 1, files: {} as Record<string, string>}

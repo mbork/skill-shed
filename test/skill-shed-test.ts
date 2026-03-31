@@ -5,14 +5,14 @@ import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {execFile} from 'node:child_process'
 import {promisify} from 'node:util'
-import {mkdtemp, writeFile, readFile, readdir, stat} from 'node:fs/promises'
+import {mkdtemp, writeFile, readFile, readdir, stat, unlink} from 'node:fs/promises'
 import {tmpdir, homedir} from 'node:os'
 import {join, resolve, dirname, basename} from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {strip_html_comments} from '../src/strip-html-comments.ts'
 import {build_manifest_from_dir, validate_manifest, find_target_conflicts, target_filename} from '../src/manifest.ts'
 import {load_global_config} from '../src/global-config.ts'
-import {hash_content, SIDECAR_FILENAME} from '../src/sidecar.ts'
+import {find_stale_names, hash_content, SIDECAR_FILENAME} from '../src/sidecar.ts'
 
 const exec_file = promisify(execFile)
 const script = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'skill-shed.ts')
@@ -711,6 +711,85 @@ test('deploy: sentinel absent after successful deploy', async () => {
 		.then(() => true)
 		.catch(() => false)
 	assert.ok(!does_sentinel_exist, 'sentinel should not exist after successful deploy')
+})
+
+// *** Deploy: stale files
+
+test('deploy: deletes unmodified owned stale file', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), '# My skill\n')
+	await writeFile(join(skill_dir, 'reference.md'), '# Ref\n')
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+	await run_deploy(skill_dir)
+
+	await unlink(join(skill_dir, 'reference.md'))
+	const result = await run_deploy(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	const does_stale_exist = await stat(join(target_dir, 'reference.md'))
+		.then(() => true)
+		.catch(() => false)
+	assert.ok(!does_stale_exist, 'stale file should be deleted from target')
+	const sidecar = JSON.parse(await readFile(join(target_dir, SIDECAR_FILENAME), 'utf8'))
+	assert.strictEqual(sidecar.files['reference.md'], undefined)
+})
+
+test('deploy: aborts when owned stale file was modified', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), '# My skill\n')
+	await writeFile(join(skill_dir, 'reference.md'), '# Ref\n')
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+	await run_deploy(skill_dir)
+
+	await unlink(join(skill_dir, 'reference.md'))
+	await writeFile(join(target_dir, 'reference.md'), '# Ref edited\n')
+	const result = await run_deploy(skill_dir)
+
+	assert.strictEqual(result.code, 1)
+	assert.match(result.stderr, /stale file.*modified/)
+})
+
+test('deploy: --force deletes modified owned stale file', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), '# My skill\n')
+	await writeFile(join(skill_dir, 'reference.md'), '# Ref\n')
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+	await run_deploy(skill_dir)
+
+	await unlink(join(skill_dir, 'reference.md'))
+	await writeFile(join(target_dir, 'reference.md'), '# Ref edited\n')
+	const result = await run_deploy(skill_dir, {flags: ['--force']})
+
+	assert.strictEqual(result.code, 0)
+	const does_stale_exist = await stat(join(target_dir, 'reference.md'))
+		.then(() => true)
+		.catch(() => false)
+	assert.ok(!does_stale_exist, 'modified stale file should be deleted with --force')
+	const sidecar = JSON.parse(await readFile(join(target_dir, SIDECAR_FILENAME), 'utf8'))
+	assert.strictEqual(sidecar.files['reference.md'], undefined)
+})
+
+// *** find_stale_names
+
+test('find_stale_names: returns empty when sidecar is empty', () => {
+	const manifest = [{source_name: 'SKILL.md', target_name: 'SKILL.md', source_content: '', target_content: ''}]
+	const sidecar = {version: 1, files: {}}
+	assert.deepStrictEqual(find_stale_names(manifest, sidecar), [])
+})
+
+test('find_stale_names: returns empty when all sidecar entries are in manifest', () => {
+	const manifest = [{source_name: 'SKILL.md', target_name: 'SKILL.md', source_content: '', target_content: ''}]
+	const sidecar = {version: 1, files: {'SKILL.md': 'abc123'}}
+	assert.deepStrictEqual(find_stale_names(manifest, sidecar), [])
+})
+
+test('find_stale_names: returns names in sidecar but not in manifest', () => {
+	const manifest = [{source_name: 'SKILL.md', target_name: 'SKILL.md', source_content: '', target_content: ''}]
+	const sidecar = {version: 1, files: {'SKILL.md': 'abc123', 'reference.md': 'def456'}}
+	assert.deepStrictEqual(find_stale_names(manifest, sidecar), ['reference.md'])
 })
 
 // ** strip_html_comments

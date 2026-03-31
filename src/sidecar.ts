@@ -85,3 +85,43 @@ export async function collect_overwrite_violations(
 	}
 	return violations
 }
+
+// * Stale files
+
+// * find_stale_names
+// Returns sidecar-owned file names absent from the manifest — stale files to delete.
+export function find_stale_names(manifest: Manifest, sidecar: Sidecar): string[] {
+	const manifest_targets = new Set(manifest.map(e => e.target_name))
+	return Object.keys(sidecar.files).filter(name => !manifest_targets.has(name))
+}
+
+// * collect_stale_violations
+// Returns violation messages for stale files that were modified after last deploy.
+export async function collect_stale_violations(
+	stale_names: string[],
+	target_dir: string,
+	sidecar: Sidecar,
+): Promise<string[]> {
+	const violations: string[] = []
+	for (const name of stale_names) {
+		const target_path = resolve(target_dir, name)
+		let current_content: Buffer
+		try {
+			current_content = await readFile(target_path)
+		} catch (e: unknown) {
+			const err = e as NodeJS.ErrnoException
+			if (err.code === 'ENOENT') {
+				continue
+			}
+			throw e
+		}
+		const current_hash = hash_content(current_content)
+		if (current_hash !== sidecar.files[name]) {
+			violations.push(
+				`${name}: stale file was modified after last deploy;`
+				+ ` use --force to delete`,
+			)
+		}
+	}
+	return violations
+}

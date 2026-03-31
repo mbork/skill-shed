@@ -384,12 +384,12 @@ Support deploying skills that consist of more than one file.
 - [[*Skill deployment]]
 - [[*Skill comment stripping]]
 
-** Steps [4/11]
+** Steps [5/11]
 - [X] Implement ~build_manifest_from_dir~: ~readdir~ + dotfile filter, returns ~Map<string, Buffer|string>~
 - [X] Implement `*.source.md` → `*.md` comment stripping for all files in the manifest
 - [X] Implement sidecar read/write and per-file overwrite check (absent/owned/unowned cases)
 - [X] Decide and implement atomicity strategy on partial failure
-- [ ] Implement stale-file policy: delete owned files, abort on unowned files
+- [X] Implement stale-file policy: delete owned files (abort if modified unless --force; ignore unowned)
 - [ ] Replace ~build_manifest_from_dir~ with ~build_manifest_from_git~ (`git ls-files --exclude-standard` + MANIFEST_CMD fallback)
 - [ ] Implement production mode (abort on any unclean git state)
 - [ ] Implement development mode (deploy index or working tree, with reporting)
@@ -628,6 +628,16 @@ into one of two cases, distinguishable via the sidecar:
   harder to reason about.
 - Ignore unowned files: silently accumulates cruft.
 ** Session log
+*** [2026-03-31] (session 2)
+- Completed: step 5 — ~find_stale_names~, ~collect_stale_violations~ in ~src/sidecar.ts~;
+  stale deletion loop and combined violation check in ~deploy()~; 3 unit + 3 e2e tests
+- In progress: NONE
+- Next: implement ~build_manifest_from_git~ (step 6) — ~git ls-files --exclude-standard~
+  run from skill dir; MANIFEST_CMD fallback in .env
+- Blockers: NONE
+- Decisions: sentinel in ~deploy.ts~ (not ~sidecar.ts~); empty sentinel file; bare ~unlink~
+  in ~delete_sentinel~; sentinel check before ~read_sidecar~; tests use ~stat~ for existence;
+  unowned stale files ignored (deferred to linting); linting to be part of deploy (opt-out TBD)
 *** [2026-03-31]
 - Completed: step 4 — sentinel in ~src/deploy.ts~: ~SENTINEL_FILENAME~, ~write_sentinel~,
   ~delete_sentinel~, ~has_sentinel~; sentinel check before ~read_sidecar~ in ~deploy()~;
