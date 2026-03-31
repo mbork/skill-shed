@@ -397,6 +397,20 @@ Support deploying skills that consist of more than one file.
 - [ ] Implement DEPLOY_DOTFILES whitelist in .env
 - [ ] Check config consistency (DEPLOY_DOTFILES lists untracked file; MANIFEST_CMD command not on $PATH)
 ** Decisions
+*** [2026-03-31] – Linting integrated into deploy (opt-out TBD)
+**** Reason
+Linting is a validation step that naturally belongs in the deploy pipeline.
+Whether to allow opting out (flag or .env setting) is deferred until the
+linting feature is designed.
+
+*** [2026-03-31] – Unowned stale file detection deferred to linting
+**** Reason
+Deploy writes files; lint validates target-dir state.  Detecting unexpected
+files is a validation concern, not a write concern.  Implementing it in
+deploy would duplicate logic that linting will own.  The runtime concern
+(stale files being loaded) is moot: skill-shed enforces SKILL.md presence
+and Claude reads only referenced files.
+
 *** [2026-03-30] – Atomicity: sentinel file approach; no write-to-temp-then-rename
 **** Reason
 A crash mid-write-loop leaves some target files at new content and some at old,
