@@ -101,6 +101,17 @@ converting `*.source.org` files to `.md`.
 - [ ] Add CONVERTER=emacs option to .env (alongside pandoc default)
 - [ ] Test Emacs export output against pandoc output for common Org constructs
 ** Decisions
+*** [2026-03-30] – Metadata in `.skill.org` files uses file-level `#+` keywords
+**** Reason
+Closest analogue to YAML front matter: file-scoped, top-of-file, not part of the document body.
+Idiomatic (mirrors `#+TITLE:`, `#+AUTHOR:`) and easy to parse via `org-element` keyword nodes or
+a plain `^#\+KEY: value` regex.  Multi-value fields use either comma-separated values or repeated
+keywords (all keyword nodes are collected).  Long descriptions use `#+BEGIN_DESCRIPTION` ...
+`#+END_DESCRIPTION` special blocks.
+**** Alternatives considered
+- Property drawer under `* Metadata` heading: drawers are heading-local, not file-global — wrong abstraction.
+- Description list (`term :: definition`): human-readable but not structured data; requires bespoke string parsing.
+- `#+PROPERTY:` declarations: same parse convenience as `#+` keywords but semantically collides with Org's built-in "set default property for all entries" meaning.
 *** [2026-03-24] – Emacs batch mode as opt-in alternative to pandoc for Org conversion
 **** Reason
 Emacs org-export is the canonical, most faithful Org → md converter.
