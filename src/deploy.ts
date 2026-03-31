@@ -1,9 +1,35 @@
 // * Imports
-import {mkdir, readFile, writeFile} from 'node:fs/promises'
+import {mkdir, readFile, stat, unlink, writeFile} from 'node:fs/promises'
 import {resolve} from 'node:path'
 import {parseEnv} from 'node:util'
 import {build_manifest_from_dir, validate_manifest} from './manifest.ts'
 import {collect_overwrite_violations, hash_content, read_sidecar, write_sidecar} from './sidecar.ts'
+
+// * Sentinel
+const SENTINEL_FILENAME = '.skill-shed-deploy-in-progress'
+
+async function write_sentinel(target_dir: string): Promise<void> {
+	const sentinel_path = resolve(target_dir, SENTINEL_FILENAME)
+	await writeFile(sentinel_path, '')
+}
+
+async function delete_sentinel(target_dir: string): Promise<void> {
+	await unlink(resolve(target_dir, SENTINEL_FILENAME))
+}
+
+async function has_sentinel(target_dir: string): Promise<boolean> {
+	const sentinel_path = resolve(target_dir, SENTINEL_FILENAME)
+	try {
+		await stat(sentinel_path)
+		return true
+	} catch (e: unknown) {
+		const err = e as NodeJS.ErrnoException
+		if (err.code === 'ENOENT') {
+			return false
+		}
+		throw e
+	}
+}
 
 // * read_target_dir
 async function read_target_dir(skill_dir: string): Promise<string> {
@@ -47,6 +73,11 @@ export async function deploy(skill_dir: string, is_force = false): Promise<void>
 
 	await mkdir(absolute_target_dir, {recursive: true})
 
+	if (await has_sentinel(absolute_target_dir) && !is_force) {
+		console.error('Error: interrupted deploy detected; re-run with --force to resume')
+		process.exit(1)
+	}
+
 	const existing_sidecar = await read_sidecar(absolute_target_dir)
 
 	const violations = await collect_overwrite_violations(manifest, absolute_target_dir, existing_sidecar)
@@ -56,6 +87,8 @@ export async function deploy(skill_dir: string, is_force = false): Promise<void>
 		}
 		process.exit(1)
 	}
+
+	await write_sentinel(absolute_target_dir)
 
 	for (const entry of manifest) {
 		const source_path = resolve(skill_dir, entry.source_name)
@@ -69,4 +102,5 @@ export async function deploy(skill_dir: string, is_force = false): Promise<void>
 		new_sidecar.files[entry.target_name] = hash_content(entry.target_content)
 	}
 	await write_sidecar(absolute_target_dir, new_sidecar)
+	await delete_sentinel(absolute_target_dir)
 }

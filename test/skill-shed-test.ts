@@ -5,7 +5,7 @@ import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {execFile} from 'node:child_process'
 import {promisify} from 'node:util'
-import {mkdtemp, writeFile, readFile, readdir} from 'node:fs/promises'
+import {mkdtemp, writeFile, readFile, readdir, stat} from 'node:fs/promises'
 import {tmpdir, homedir} from 'node:os'
 import {join, resolve, dirname, basename} from 'node:path'
 import {fileURLToPath} from 'node:url'
@@ -663,6 +663,54 @@ test('deploy: --force overwrites file with no sidecar entry', async () => {
 	assert.strictEqual(result.code, 0)
 	const deployed = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
 	assert.strictEqual(deployed, content)
+})
+
+// *** Deploy: sentinel
+const SENTINEL_FILENAME = '.skill-shed-deploy-in-progress'
+
+test('deploy: aborts when interrupted deploy sentinel present', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), '# My skill\n')
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+	await writeFile(join(target_dir, SENTINEL_FILENAME), '')
+
+	const result = await run_deploy(skill_dir)
+
+	assert.strictEqual(result.code, 1)
+	assert.match(result.stderr, /interrupted deploy/)
+})
+
+test('deploy: --force proceeds despite sentinel', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	const content = '# My skill\n'
+	await writeFile(join(skill_dir, 'SKILL.md'), content)
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+	await writeFile(join(target_dir, SENTINEL_FILENAME), '')
+
+	const result = await run_deploy(skill_dir, {flags: ['--force']})
+
+	assert.strictEqual(result.code, 0)
+	const does_sentinel_exist = await stat(join(target_dir, SENTINEL_FILENAME))
+		.then(() => true)
+		.catch(() => false)
+	assert.ok(!does_sentinel_exist, 'sentinel should be deleted after successful deploy')
+})
+
+test('deploy: sentinel absent after successful deploy', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), '# My skill\n')
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+
+	const result = await run_deploy(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	const does_sentinel_exist = await stat(join(target_dir, SENTINEL_FILENAME))
+		.then(() => true)
+		.catch(() => false)
+	assert.ok(!does_sentinel_exist, 'sentinel should not exist after successful deploy')
 })
 
 // ** strip_html_comments
