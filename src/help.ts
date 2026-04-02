@@ -11,7 +11,7 @@ Commands:
   deploy  Deploy a skill to its target directory
   help    Show help for a command
 
-Global config: ~/.skill-shed.env (dotenv format)
+Global config: $SKILL_SHED_CONFIG (default: ~/.skill-shed.env, dotenv format)
   DEFAULT_TARGET_DIRECTORY  Base path for skill deployment (default: ~/.claude/skills/)
 
 Run 'skill-shed help <command>' for detailed usage.`
