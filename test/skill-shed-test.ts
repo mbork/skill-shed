@@ -127,6 +127,7 @@ test('init: creates skill dir, .env, and SKILL.source.md by default', async () =
 	assert.strictEqual(result.stdout.trim(), [
 		`Initialized ${skill_dir}`,
 		`TARGET_DIRECTORY=${deploy_dir}`,
+		`.env created in ${skill_dir}, don't forget to add it to .gitignore if you initialize a Git repo later`,
 	].join('\n'))
 	assert.strictEqual(
 		strip_env_comments(await readFile(join(skill_dir, '.env'), 'utf8')),
@@ -152,6 +153,7 @@ test('init: --no-comments creates SKILL.md instead', async () => {
 	assert.strictEqual(result.stdout.trim(), [
 		`Initialized ${skill_dir}`,
 		`TARGET_DIRECTORY=${deploy_dir}`,
+		`.env created in ${skill_dir}, don't forget to add it to .gitignore if you initialize a Git repo later`,
 	].join('\n'))
 	assert.strictEqual(
 		strip_env_comments(await readFile(join(skill_dir, '.env'), 'utf8')),
@@ -177,6 +179,7 @@ test('init: --comments creates SKILL.source.md', async () => {
 	assert.strictEqual(result.stdout.trim(), [
 		`Initialized ${skill_dir}`,
 		`TARGET_DIRECTORY=${deploy_dir}`,
+		`.env created in ${skill_dir}, don't forget to add it to .gitignore if you initialize a Git repo later`,
 	].join('\n'))
 	assert.strictEqual(
 		strip_env_comments(await readFile(join(skill_dir, '.env'), 'utf8')),
@@ -258,6 +261,7 @@ test('init: creates .env in existing dir', async () => {
 		'SKILL.md already exists',
 		`Initialized ${skill_dir}`,
 		`TARGET_DIRECTORY=${deploy_dir}`,
+		`.env created in ${skill_dir}, don't forget to add it to .gitignore if you initialize a Git repo later`,
 	].join('\n'))
 	assert.strictEqual(
 		strip_env_comments(await readFile(join(skill_dir, '.env'), 'utf8')),
@@ -282,6 +286,7 @@ test('init: default creates .env when SKILL.source.md already exists', async () 
 		'SKILL.source.md already exists',
 		`Initialized ${skill_dir}`,
 		`TARGET_DIRECTORY=${deploy_dir}`,
+		`.env created in ${skill_dir}, don't forget to add it to .gitignore if you initialize a Git repo later`,
 	].join('\n'))
 	assert.strictEqual(
 		strip_env_comments(await readFile(join(skill_dir, '.env'), 'utf8')),
@@ -305,6 +310,7 @@ test('init: --no-comments creates .env when SKILL.md already exists', async () =
 		'SKILL.md already exists',
 		`Initialized ${skill_dir}`,
 		`TARGET_DIRECTORY=${deploy_dir}`,
+		`.env created in ${skill_dir}, don't forget to add it to .gitignore if you initialize a Git repo later`,
 	].join('\n'))
 	assert.strictEqual(
 		strip_env_comments(await readFile(join(skill_dir, '.env'), 'utf8')),
@@ -343,6 +349,7 @@ test('init: does not create SKILL.md if it already exists', async () => {
 		'SKILL.md already exists',
 		`Initialized ${skill_dir}`,
 		`TARGET_DIRECTORY=${deploy_dir}`,
+		`.env created in ${skill_dir}, don't forget to add it to .gitignore if you initialize a Git repo later`,
 	].join('\n'))
 	assert.strictEqual(
 		strip_env_comments(await readFile(join(skill_dir, '.env'), 'utf8')),
@@ -365,6 +372,7 @@ test('init: default deploy dir is ~/.claude/skills/<skill-name>', async () => {
 	assert.strictEqual(result.stdout.trim(), [
 		`Initialized ${skill_dir}`,
 		`TARGET_DIRECTORY=${expected_deploy_dir}`,
+		`.env created in ${skill_dir}, don't forget to add it to .gitignore if you initialize a Git repo later`,
 	].join('\n'))
 	assert.strictEqual(
 		strip_env_comments(await readFile(join(skill_dir, '.env'), 'utf8')),
@@ -419,6 +427,36 @@ test('init: explicit deploy_dir overrides global config', async () => {
 	assert.strictEqual(result.code, 0)
 	const env_content = await readFile(join(skill_dir, '.env'), 'utf8')
 	assert.strictEqual(strip_env_comments(env_content), `TARGET_DIRECTORY=${explicit_dir}`)
+})
+
+test('init: .env message says "ignored by Git" when already ignored', async () => {
+	const skill_dir = await make_tmp_dir()
+	const deploy_dir = await make_tmp_dir()
+	await setup_git(skill_dir)
+
+	const result = await run_init(skill_dir, deploy_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), [
+		`Initialized ${skill_dir}`,
+		`TARGET_DIRECTORY=${deploy_dir}`,
+		`.env created in ${skill_dir}, ignored by Git`,
+	].join('\n'))
+})
+
+test('init: .gitignore hint when .env is not ignored in git repo', async () => {
+	const skill_dir = await make_tmp_dir()
+	const deploy_dir = await make_tmp_dir()
+	await exec_file('git', ['init'], {cwd: skill_dir})
+
+	const result = await run_init(skill_dir, deploy_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), [
+		`Initialized ${skill_dir}`,
+		`TARGET_DIRECTORY=${deploy_dir}`,
+		`.env created in ${skill_dir}, add it to .gitignore`,
+	].join('\n'))
 })
 
 // ** Deploy

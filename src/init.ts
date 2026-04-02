@@ -1,9 +1,13 @@
 // * Imports
+import {execFile as execFile_cb} from 'node:child_process'
 import {mkdir, readFile, readdir, writeFile} from 'node:fs/promises'
 import {resolve, basename} from 'node:path'
+import {promisify} from 'node:util'
 import {strip_html_comments} from './strip-html-comments.ts'
 import {find_target_conflicts} from './manifest.ts'
 import {load_global_config} from './global-config.ts'
+
+const execFile = promisify(execFile_cb)
 
 // * init
 export async function init(
@@ -77,4 +81,18 @@ export async function init(
 
 	console.log(`Initialized ${skill_dir}`)
 	console.log(`TARGET_DIRECTORY=${deploy_dir}`)
+
+	const env_message = [`.env created in ${skill_dir}`]
+	try {
+		await execFile('git', ['check-ignore', '-q', resolve(skill_dir, '.env')], {cwd: skill_dir})
+		env_message.push(`ignored by Git`)
+	} catch (e: unknown) {
+		const err = e as NodeJS.ErrnoException & {stderr?: string}
+		if (err.code === 'ENOENT' || err.stderr?.includes('not a git repository')) {
+			env_message.push(`don't forget to add it to .gitignore if you initialize a Git repo later`)
+		} else {
+			env_message.push(`add it to .gitignore`)
+		}
+	}
+	console.log(env_message.join(', '))
 }
