@@ -5,6 +5,26 @@ A set of tools (in the form of a Node.js CLI script) for managing
 agent skills: format conversion, comment stripping, linting,
 deployment.  Currently in WiP/PoC stage.
 
+* TODO Document =.env= variables in =config --help=
+Add a single line to =deploy --help= and =init --help= pointing to =skill-shed config= for
+the full variable reference; make =config --help= the canonical list of all =.env= variables
+(both global and per-skill).
+
+** Steps [/]
+- [ ] Add "See =skill-shed config= for configuration reference" line to =deploy_help= and =init_help= in =src/help.ts=
+- [ ] Add full variable reference (global + per-skill) to =config_help= in =src/help.ts=
+** Decisions
+*** [2026-04-02] – Point =deploy= and =init= help to =config --help=; make =config --help= the canonical variable reference
+**** Reason
+Listing variables inline in =deploy --help= duplicates information and drifts as variables are added.
+=init= is the setup-time discovery point; =deploy= is the run-time one — both warrant a pointer,
+neither is the right place for the full reference.  =config --help= is the single canonical source,
+consistent with the =config= command's purpose.
+**** Alternatives considered
+- Inline in =deploy --help= only: misses new-user discovery at =init= time.
+- Inline in both =deploy= and =init= help: duplication and maintenance drift.
+** Session log
+
 * TODO `config` subcommand
 Print the effective resolved configuration to stdout (values active
 right now, including compiled-in defaults when =~/.skill-shed.env= is
@@ -736,6 +756,16 @@ into one of two cases, distinguishable via the sidecar:
   harder to reason about.
 - Ignore unowned files: silently accumulates cruft.
 ** Session log
+*** [2026-04-02] (session 4)
+- Completed: committed session 3 staged batch; renaming refactors —
+  ~Source_mode~ → ~ManifestSource~, ~effective_source~ → ~manifest_source~,
+  ~source~ → ~command_line_source~, ~_dir~ → ~_skill_dir~ in ~build_*~ signatures,
+  ~target_dir~ → ~absolute_target_dir~ returned from ~read_skill_env~
+- In progress: NONE
+- Next: implement ~build_manifest_from_git_clean~ (step 7); add typed init + else guard for ~manifest~ (step 12)
+- Blockers: NONE
+- Decisions: ~let manifest: Manifest = []~ + final else guard (removes ~!~ assertions);
+  ~config --help~ as canonical ~.env= variable reference (=deploy= and ~init~ help point to it)
 *** [2026-03-31] (session 3)
 - Completed: step 6 — ~ManifestSource~ type + 5 stubs in ~src/manifest.ts~; two-tier dispatch in
   ~src/deploy.ts~ (MANIFEST_COMMAND → git modes; ~detect_git~; ~--clean~ placeholder); flags
