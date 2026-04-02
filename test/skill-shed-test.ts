@@ -5,12 +5,12 @@ import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {execFile} from 'node:child_process'
 import {promisify} from 'node:util'
-import {mkdtemp, writeFile, readFile, readdir, stat, unlink} from 'node:fs/promises'
+import {mkdir, mkdtemp, writeFile, readFile, readdir, stat, unlink} from 'node:fs/promises'
 import {tmpdir, homedir} from 'node:os'
 import {join, resolve, dirname, basename} from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {strip_html_comments} from '../src/strip-html-comments.ts'
-import {build_manifest_from_dir, validate_manifest, find_target_conflicts, target_filename} from '../src/manifest.ts'
+import {build_manifest_from_dir, build_manifest_from_git_clean, validate_manifest, find_target_conflicts, target_filename} from '../src/manifest.ts'
 import {load_global_config} from '../src/global-config.ts'
 import {find_stale_names, hash_content, SIDECAR_FILENAME} from '../src/sidecar.ts'
 
@@ -35,17 +35,25 @@ async function run_init(skill_dir: string, deploy_dir?: string, flags: string[] 
 	}
 }
 
+async function setup_git(skill_dir: string): Promise<void> {
+	await exec_file('git', ['init'], {cwd: skill_dir})
+	await exec_file('git', ['config', '--local', 'user.email', 'test@example.com'], {cwd: skill_dir})
+	await exec_file('git', ['config', '--local', 'user.name', 'Test'], {cwd: skill_dir})
+	await writeFile(join(skill_dir, '.git', 'info', 'exclude'), '.env\n')
+}
+
+async function git_commit(dir: string): Promise<void> {
+	await exec_file('git', ['add', '-A'], {cwd: dir})
+	await exec_file('git', ['commit', '--allow-empty', '-m', 'test'], {cwd: dir})
+}
+
 async function run_deploy(skill_dir: string, options: {cwd?: string, flags?: string[]} = {}): Promise<Run_result> {
 	const env = {...process.env}
 	delete env.TARGET_DIRECTORY
 	const flags = options.flags ?? []
-	// Tests run in non-git temp dirs; git init so deploy passes the git detection check.
-	// The --clean placeholder still uses build_manifest_from_dir, not git ls-files.
-	try {
-		await exec_file('git', ['rev-parse', '--is-inside-work-tree'], {cwd: skill_dir})
-	} catch {
-		await exec_file('git', ['init'], {cwd: skill_dir})
-	}
+	await setup_git(skill_dir)
+	await exec_file('git', ['add', '-A'], {cwd: skill_dir})
+	await exec_file('git', ['commit', '--allow-empty', '-m', 'test'], {cwd: skill_dir})
 	try {
 		const result = await exec_file('node', [script, 'deploy', skill_dir, ...flags], {env, cwd: options.cwd})
 		return {stdout: result.stdout, stderr: result.stderr, code: 0}
@@ -561,13 +569,27 @@ test('deploy: successful deploy', async () => {
 	assert.strictEqual(deployed, content)
 })
 
-test('deploy: multi-file skill deploys all non-dotfiles', async () => {
+test('deploy: skill file in subdirectory is deployed with directory created', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), '# Skill\n')
+	await mkdir(join(skill_dir, 'examples'))
+	await writeFile(join(skill_dir, 'examples', 'demo.md'), 'demo\n')
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+
+	const result = await run_deploy(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	const deployed = await readFile(join(target_dir, 'examples', 'demo.md'), 'utf8')
+	assert.strictEqual(deployed, 'demo\n')
+})
+
+test('deploy: multi-file skill deploys all git-tracked files', async () => {
 	const skill_dir = await make_tmp_dir()
 	const target_dir = await make_tmp_dir()
 	await writeFile(join(skill_dir, 'SKILL.source.md'), '# My skill\n<!-- comment -->\nContent.\n')
 	await writeFile(join(skill_dir, 'reference.md'), '# Reference\nSome reference.\n')
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
-	await writeFile(join(skill_dir, '.gitignore'), '*.log\n')
 
 	const result = await run_deploy(skill_dir)
 
@@ -1122,6 +1144,196 @@ test('build_manifest_from_dir: pass-through .md has equal source and target cont
 	assert.strictEqual(manifest[0].source_name, 'SKILL.md')
 	assert.strictEqual(manifest[0].target_name, 'SKILL.md')
 	assert.strictEqual(manifest[0].source_content, manifest[0].target_content)
+})
+
+// ** build_manifest_from_git_clean
+
+test('build_manifest_from_git_clean: empty repo returns empty array', async () => {
+	const dir = await make_tmp_dir()
+	await setup_git(dir)
+	await git_commit(dir)
+
+	const manifest = await build_manifest_from_git_clean(dir)
+
+	assert.strictEqual(manifest.length, 0)
+})
+
+test('build_manifest_from_git_clean: returns entries for tracked files', async () => {
+	const dir = await make_tmp_dir()
+	await setup_git(dir)
+	await writeFile(join(dir, 'SKILL.md'), 'hello')
+	await writeFile(join(dir, 'extra.txt'), 'world')
+	await git_commit(dir)
+
+	const manifest = await build_manifest_from_git_clean(dir)
+
+	assert.deepStrictEqual(manifest.map(e => e.source_name), ['SKILL.md', 'extra.txt'])
+	assert.strictEqual(manifest[0].target_content, 'hello')
+	assert.deepStrictEqual(manifest[1].target_content, Buffer.from('world'))
+})
+
+test('build_manifest_from_git_clean: throws when untracked files are present', async () => {
+	const dir = await make_tmp_dir()
+	await setup_git(dir)
+	await writeFile(join(dir, 'SKILL.md'), 'content')
+	await git_commit(dir)
+	await writeFile(join(dir, 'untracked.txt'), 'ghost')
+
+	await assert.rejects(
+		() => build_manifest_from_git_clean(dir),
+		/uncommitted changes/,
+	)
+})
+
+test('build_manifest_from_git_clean: throws when working tree is dirty', async () => {
+	const dir = await make_tmp_dir()
+	await setup_git(dir)
+	await writeFile(join(dir, 'SKILL.md'), 'original')
+	await git_commit(dir)
+	await writeFile(join(dir, 'SKILL.md'), 'modified')
+
+	await assert.rejects(
+		() => build_manifest_from_git_clean(dir),
+		/uncommitted changes/,
+	)
+})
+
+test('build_manifest_from_git_clean: throws when changes are staged', async () => {
+	const dir = await make_tmp_dir()
+	await setup_git(dir)
+	await writeFile(join(dir, 'SKILL.md'), 'original')
+	await git_commit(dir)
+	await writeFile(join(dir, 'SKILL.md'), 'modified')
+	await exec_file('git', ['add', '-A'], {cwd: dir})
+
+	await assert.rejects(
+		() => build_manifest_from_git_clean(dir),
+		/uncommitted changes/,
+	)
+})
+
+test('build_manifest_from_git_clean: throws when a tracked file is deleted from disk', async () => {
+	const dir = await make_tmp_dir()
+	await setup_git(dir)
+	await writeFile(join(dir, 'SKILL.md'), 'content')
+	await git_commit(dir)
+	await unlink(join(dir, 'SKILL.md'))
+
+	await assert.rejects(
+		() => build_manifest_from_git_clean(dir),
+		/uncommitted changes/,
+	)
+})
+
+test('build_manifest_from_git_clean: throws when a tracked file is staged for deletion', async () => {
+	const dir = await make_tmp_dir()
+	await setup_git(dir)
+	await writeFile(join(dir, 'SKILL.md'), 'content')
+	await git_commit(dir)
+	await exec_file('git', ['rm', 'SKILL.md'], {cwd: dir})
+
+	await assert.rejects(
+		() => build_manifest_from_git_clean(dir),
+		/uncommitted changes/,
+	)
+})
+
+test('build_manifest_from_git_clean: succeeds when dirty state is outside skill_dir in a larger repo', async () => {
+	const parent = await make_tmp_dir()
+	await setup_git(parent)
+	await writeFile(join(parent, 'other.md'), 'other')
+	const skill_dir = join(parent, 'my-skill')
+	await mkdir(skill_dir)
+	await writeFile(join(skill_dir, 'SKILL.md'), 'content')
+	await exec_file('git', ['add', '-A'], {cwd: parent})
+	await exec_file('git', ['commit', '-m', 'test'], {cwd: parent})
+	await writeFile(join(parent, 'other.md'), 'modified')
+
+	const manifest = await build_manifest_from_git_clean(skill_dir)
+
+	assert.deepStrictEqual(manifest.map(e => e.source_name), ['SKILL.md'])
+})
+
+test('build_manifest_from_git_clean: excludes .env via .git/info/exclude', async () => {
+	const dir = await make_tmp_dir()
+	await setup_git(dir)
+	await writeFile(join(dir, 'SKILL.md'), 'content')
+	await git_commit(dir)
+	await writeFile(join(dir, '.env'), 'TARGET_DIRECTORY=/tmp/x')
+
+	const manifest = await build_manifest_from_git_clean(dir)
+
+	assert.deepStrictEqual(manifest.map(e => e.source_name), ['SKILL.md'])
+})
+
+test('build_manifest_from_git_clean: tracked dotfiles are included', async () => {
+	const dir = await make_tmp_dir()
+	await setup_git(dir)
+	await writeFile(join(dir, 'SKILL.md'), 'content')
+	await writeFile(join(dir, '.toolrc'), 'setting=1')
+	await git_commit(dir)
+
+	const manifest = await build_manifest_from_git_clean(dir)
+
+	assert.ok(manifest.some(e => e.source_name === '.toolrc'))
+})
+
+test('build_manifest_from_git_clean: entries are sorted by source_name', async () => {
+	const dir = await make_tmp_dir()
+	await setup_git(dir)
+	await writeFile(join(dir, 'zebra.txt'), '')
+	await writeFile(join(dir, 'SKILL.md'), '')
+	await writeFile(join(dir, 'alpha.txt'), '')
+	await git_commit(dir)
+
+	const manifest = await build_manifest_from_git_clean(dir)
+
+	assert.deepStrictEqual(
+		manifest.map(e => e.source_name),
+		['SKILL.md', 'alpha.txt', 'zebra.txt'],
+	)
+})
+
+test('build_manifest_from_git_clean: .source.md strips comments into target_content', async () => {
+	const dir = await make_tmp_dir()
+	await setup_git(dir)
+	await writeFile(join(dir, 'SKILL.source.md'), '# Hello\n<!-- comment -->\nworld')
+	await git_commit(dir)
+
+	const manifest = await build_manifest_from_git_clean(dir)
+
+	assert.strictEqual(manifest[0].target_name, 'SKILL.md')
+	assert.strictEqual(manifest[0].target_content, '# Hello\nworld')
+	assert.strictEqual(manifest[0].source_content, '# Hello\n<!-- comment -->\nworld')
+})
+
+test('build_manifest_from_git_clean: pass-through .md has equal source and target content', async () => {
+	const dir = await make_tmp_dir()
+	await setup_git(dir)
+	await writeFile(join(dir, 'SKILL.md'), '# Hello')
+	await git_commit(dir)
+
+	const manifest = await build_manifest_from_git_clean(dir)
+
+	assert.strictEqual(manifest[0].source_content, manifest[0].target_content)
+})
+
+test('build_manifest_from_git_clean: handles files in subdirectories', async () => {
+	const dir = await make_tmp_dir()
+	await setup_git(dir)
+	await writeFile(join(dir, 'SKILL.md'), 'content')
+	await mkdir(join(dir, 'examples'))
+	await writeFile(join(dir, 'examples', 'demo.source.md'), 'demo\n<!-- comment -->\n')
+	await git_commit(dir)
+
+	const manifest = await build_manifest_from_git_clean(dir)
+
+	assert.deepStrictEqual(
+		manifest.map(e => e.source_name),
+		['SKILL.md', 'examples/demo.source.md'],
+	)
+	assert.strictEqual(manifest[1].target_name, 'examples/demo.md')
+	assert.strictEqual(manifest[1].target_content, 'demo\n')
 })
 
 // ** find_target_conflicts

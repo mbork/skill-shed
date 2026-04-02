@@ -1,11 +1,11 @@
 // * Imports
 import {mkdir, readFile, stat, unlink, writeFile} from 'node:fs/promises'
-import {resolve} from 'node:path'
+import {dirname, resolve} from 'node:path'
 import {parseEnv, promisify} from 'node:util'
 import {execFile as execFile_cb} from 'node:child_process'
 import {
 	build_manifest_from_command,
-	build_manifest_from_dir,
+	build_manifest_from_git_clean,
 	build_manifest_from_git_workdir,
 	build_manifest_from_git_staged,
 	build_manifest_from_git_ref,
@@ -120,37 +120,41 @@ export async function deploy(
 		: command_line_source
 
 	let manifest: Manifest = []
-	if (manifest_source.kind === 'command') {
-		manifest = await build_manifest_from_command(skill_dir, manifest_source.command)
-	} else {
-		const git_status = await detect_git(skill_dir)
-		if (git_status === 'no-git') {
-			console.error(
-				'Error: git not found; install git and run `git init`,'
-				+ ' or set MANIFEST_COMMAND in .env',
-			)
-			process.exit(1)
-		}
-		if (git_status === 'no-repo') {
-			console.error(
-				'Error: not a git repository; run `git init` or set MANIFEST_COMMAND in .env',
-			)
-			process.exit(1)
-		}
-		if (manifest_source.kind === 'workdir') {
-			manifest = await build_manifest_from_git_workdir(skill_dir)
-		} else if (manifest_source.kind === 'staged') {
-			manifest = await build_manifest_from_git_staged(skill_dir)
-		} else if (manifest_source.kind === 'ref') {
-			manifest = await build_manifest_from_git_ref(skill_dir, manifest_source.ref)
-		} else if (manifest_source.kind === 'clean') {
-			// TODO: replace with build_manifest_from_git_clean once implemented
-			manifest = await build_manifest_from_dir(skill_dir)
+	try {
+		if (manifest_source.kind === 'command') {
+			manifest = await build_manifest_from_command(skill_dir, manifest_source.command)
 		} else {
-			const kind = (manifest_source as {kind: string}).kind
-			console.error(`Error: unhandled manifest source kind: ${kind}`)
-			process.exit(1)
+			const git_status = await detect_git(skill_dir)
+			if (git_status === 'no-git') {
+				console.error(
+					'Error: git not found; install git and run `git init`,'
+					+ ' or set MANIFEST_COMMAND in .env',
+				)
+				process.exit(1)
+			}
+			if (git_status === 'no-repo') {
+				console.error(
+					'Error: not a git repository; run `git init` or set MANIFEST_COMMAND in .env',
+				)
+				process.exit(1)
+			}
+			if (manifest_source.kind === 'workdir') {
+				manifest = await build_manifest_from_git_workdir(skill_dir)
+			} else if (manifest_source.kind === 'staged') {
+				manifest = await build_manifest_from_git_staged(skill_dir)
+			} else if (manifest_source.kind === 'ref') {
+				manifest = await build_manifest_from_git_ref(skill_dir, manifest_source.ref)
+			} else if (manifest_source.kind === 'clean') {
+				manifest = await build_manifest_from_git_clean(skill_dir)
+			} else {
+				const kind = (manifest_source as {kind: string}).kind
+				console.error(`Error: unhandled manifest source kind: ${kind}`)
+				process.exit(1)
+			}
 		}
+	} catch (e: unknown) {
+		console.error(`Error: ${(e as Error).message}`)
+		process.exit(1)
 	}
 
 	try {
@@ -189,6 +193,7 @@ export async function deploy(
 	for (const entry of manifest) {
 		const source_path = resolve(skill_dir, entry.source_name)
 		const target_path = resolve(absolute_target_dir, entry.target_name)
+		await mkdir(dirname(target_path), {recursive: true})
 		await writeFile(target_path, entry.target_content)
 		console.log(`Deployed: ${source_path} -> ${target_path}`)
 	}

@@ -5,9 +5,13 @@
 
 // * Imports
 
+import {execFile as execFile_cb} from 'node:child_process'
 import {readdir, readFile} from 'node:fs/promises'
 import {resolve} from 'node:path'
+import {promisify} from 'node:util'
 import {strip_html_comments} from './strip-html-comments.ts'
+
+const execFile = promisify(execFile_cb)
 
 // * Types
 
@@ -67,8 +71,27 @@ export async function build_manifest_from_command(
 }
 
 // * build_manifest_from_git_clean
-export async function build_manifest_from_git_clean(_skill_dir: string): Promise<Manifest> {
-	throw new Error('not implemented yet')
+export async function build_manifest_from_git_clean(skill_dir: string): Promise<Manifest> {
+	const status_result = await execFile(
+		'git', ['status', '--porcelain', '--', '.'], {cwd: skill_dir},
+	)
+	if (status_result.stdout.trim() !== '') {
+		throw new Error(
+			`${skill_dir} has uncommitted changes; use --workdir, --staged, or --ref instead`,
+		)
+	}
+	const ls_result = await execFile('git', ['ls-files'], {cwd: skill_dir})
+	const names = ls_result.stdout.split('\n').filter(Boolean).sort()
+	const manifest: Manifest = await Promise.all(names.map(async (source_name) => {
+		const buffer = await readFile(resolve(skill_dir, source_name))
+		const source_content = source_name.endsWith('.md') ? buffer.toString('utf8') : buffer
+		const target_name = target_filename(source_name)
+		const target_content = source_name.endsWith('.source.md')
+			? strip_html_comments(source_content as string)
+			: source_content
+		return {source_name, target_name, source_content, target_content}
+	}))
+	return manifest
 }
 
 // * build_manifest_from_git_workdir
