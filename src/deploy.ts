@@ -1,9 +1,27 @@
 // * Imports
 import {mkdir, readFile, stat, unlink, writeFile} from 'node:fs/promises'
 import {resolve} from 'node:path'
-import {parseEnv} from 'node:util'
-import {build_manifest_from_dir, validate_manifest} from './manifest.ts'
+import {parseEnv, promisify} from 'node:util'
+import {execFile as execFile_cb} from 'node:child_process'
+import {
+	build_manifest_from_command,
+	build_manifest_from_dir,
+	build_manifest_from_git_workdir,
+	build_manifest_from_git_staged,
+	build_manifest_from_git_ref,
+	validate_manifest,
+} from './manifest.ts'
+
+const execFile = promisify(execFile_cb)
 import {collect_overwrite_violations, collect_stale_violations, find_stale_names, hash_content, read_sidecar, write_sidecar} from './sidecar.ts'
+
+// * ManifestSource
+export type ManifestSource
+	= | {kind: 'clean'}
+		| {kind: 'workdir'}
+		| {kind: 'staged'}
+		| {kind: 'ref', ref: string}
+		| {kind: 'command', command: string}
 
 // * Sentinel
 const SENTINEL_FILENAME = '.skill-shed-deploy-in-progress'
@@ -31,8 +49,11 @@ async function has_sentinel(target_dir: string): Promise<boolean> {
 	}
 }
 
-// * read_target_dir
-async function read_target_dir(skill_dir: string): Promise<string> {
+// * read_skill_env
+async function read_skill_env(skill_dir: string): Promise<{
+	absolute_target_dir: string
+	manifest_command: string | undefined
+}> {
 	const env_path = resolve(skill_dir, '.env')
 
 	let env_content: string
@@ -55,17 +76,68 @@ async function read_target_dir(skill_dir: string): Promise<string> {
 		process.exit(1)
 	}
 
-	return resolve(skill_dir, target_dir)
+	return {
+		absolute_target_dir: resolve(skill_dir, target_dir),
+		manifest_command: env.MANIFEST_COMMAND,
+	}
+}
+
+// * detect_git
+async function detect_git(dir: string): Promise<'no-git' | 'no-repo' | 'ok'> {
+	try {
+		await execFile('git', ['rev-parse', '--is-inside-work-tree'], {cwd: dir})
+		return 'ok'
+	} catch (e: unknown) {
+		const err = e as NodeJS.ErrnoException & {stderr?: string}
+		if (err.code === 'ENOENT') {
+			return 'no-git'
+		}
+		if (err.stderr?.includes('not a git repository')) {
+			return 'no-repo'
+		}
+		throw e
+	}
 }
 
 // * deploy
-export async function deploy(skill_dir: string, is_force = false): Promise<void> {
-	const absolute_target_dir = await read_target_dir(skill_dir)
+export async function deploy(
+	skill_dir: string,
+	is_force = false,
+	command_line_source: ManifestSource = {kind: 'clean'},
+): Promise<void> {
+	const {absolute_target_dir, manifest_command} = await read_skill_env(skill_dir)
 
-	const manifest = await build_manifest_from_dir(skill_dir)
+	const manifest_source: ManifestSource = manifest_command
+		? {kind: 'command', command: manifest_command}
+		: command_line_source
+
+	let manifest
+	if (manifest_source.kind === 'command') {
+		manifest = await build_manifest_from_command(skill_dir, manifest_source.command)
+	} else {
+		const git_status = await detect_git(skill_dir)
+		if (git_status === 'no-git') {
+			console.error('Error: git not found; install git and run `git init`, or set MANIFEST_COMMAND in .env')
+			process.exit(1)
+		}
+		if (git_status === 'no-repo') {
+			console.error('Error: not a git repository; run `git init` or set MANIFEST_COMMAND in .env')
+			process.exit(1)
+		}
+		if (manifest_source.kind === 'workdir') {
+			manifest = await build_manifest_from_git_workdir(skill_dir)
+		} else if (manifest_source.kind === 'staged') {
+			manifest = await build_manifest_from_git_staged(skill_dir)
+		} else if (manifest_source.kind === 'ref') {
+			manifest = await build_manifest_from_git_ref(skill_dir, manifest_source.ref)
+		} else if (manifest_source.kind === 'clean') {
+			// TODO: replace with build_manifest_from_git_clean once implemented
+			manifest = await build_manifest_from_dir(skill_dir)
+		}
+	}
 
 	try {
-		validate_manifest(manifest)
+		validate_manifest(manifest!)
 	} catch (e: unknown) {
 		console.error(`Error: ${(e as Error).message}`)
 		process.exit(1)
@@ -80,9 +152,9 @@ export async function deploy(skill_dir: string, is_force = false): Promise<void>
 
 	const existing_sidecar = await read_sidecar(absolute_target_dir)
 
-	const stale_names = find_stale_names(manifest, existing_sidecar)
+	const stale_names = find_stale_names(manifest!, existing_sidecar)
 	const stale_violations = await collect_stale_violations(stale_names, absolute_target_dir, existing_sidecar)
-	const overwrite_violations = await collect_overwrite_violations(manifest, absolute_target_dir, existing_sidecar)
+	const overwrite_violations = await collect_overwrite_violations(manifest!, absolute_target_dir, existing_sidecar)
 	const all_violations = [...stale_violations, ...overwrite_violations]
 	if (all_violations.length > 0 && !is_force) {
 		for (const v of all_violations) {
@@ -93,7 +165,7 @@ export async function deploy(skill_dir: string, is_force = false): Promise<void>
 
 	await write_sentinel(absolute_target_dir)
 
-	for (const entry of manifest) {
+	for (const entry of manifest!) {
 		const source_path = resolve(skill_dir, entry.source_name)
 		const target_path = resolve(absolute_target_dir, entry.target_name)
 		await writeFile(target_path, entry.target_content)
@@ -114,7 +186,7 @@ export async function deploy(skill_dir: string, is_force = false): Promise<void>
 	}
 
 	const new_sidecar = {version: 1, files: {} as Record<string, string>}
-	for (const entry of manifest) {
+	for (const entry of manifest!) {
 		new_sidecar.files[entry.target_name] = hash_content(entry.target_content)
 	}
 	await write_sidecar(absolute_target_dir, new_sidecar)

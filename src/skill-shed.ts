@@ -5,6 +5,7 @@ import {resolve} from 'node:path'
 import {parseArgs} from 'node:util'
 import {init} from './init.ts'
 import {deploy} from './deploy.ts'
+import type {ManifestSource} from './deploy.ts'
 import {help_and_exit} from './help.ts'
 
 // * handle_help_flag
@@ -21,6 +22,7 @@ function parse_args(raw_args: string[]): {
 	third_arg: string | undefined
 	comments_mode: boolean | null
 	is_force: boolean
+	command_line_source: ManifestSource
 } {
 	const {positionals, values} = parseArgs({
 		args: raw_args,
@@ -29,6 +31,10 @@ function parse_args(raw_args: string[]): {
 			'comments': {type: 'boolean'},
 			'no-comments': {type: 'boolean'},
 			'force': {type: 'boolean', short: 'f'},
+			'clean': {type: 'boolean'},
+			'workdir': {type: 'boolean'},
+			'staged': {type: 'boolean'},
+			'ref': {type: 'string'},
 		},
 	})
 
@@ -45,7 +51,22 @@ function parse_args(raw_args: string[]): {
 	const comments_mode = values.comments ? true : values['no-comments'] ? false : null
 	const is_force = values.force ?? false
 
-	return {command, second_arg, third_arg, comments_mode, is_force}
+	const command_line_source_flags = [values.clean, values.workdir, values.staged, values.ref !== undefined]
+		.filter(Boolean)
+	if (command_line_source_flags.length > 1) {
+		console.error('Error: --clean, --workdir, --staged, and --ref are mutually exclusive')
+		process.exit(1)
+	}
+	let command_line_source: ManifestSource = {kind: 'clean'}
+	if (values.workdir) {
+		command_line_source = {kind: 'workdir'}
+	} else if (values.staged) {
+		command_line_source = {kind: 'staged'}
+	} else if (values.ref !== undefined) {
+		command_line_source = {kind: 'ref', ref: values.ref}
+	}
+
+	return {command, second_arg, third_arg, comments_mode, is_force, command_line_source}
 }
 
 // * dispatch
@@ -55,6 +76,7 @@ async function dispatch(
 	third_arg: string | undefined,
 	comments_mode: boolean | null,
 	is_force: boolean,
+	command_line_source: ManifestSource,
 ): Promise<void> {
 	if (command === 'help') {
 		help_and_exit(second_arg)
@@ -65,7 +87,7 @@ async function dispatch(
 	if (command === 'init') {
 		await init(skill_dir, third_arg, comments_mode)
 	} else if (command === 'deploy') {
-		await deploy(skill_dir, is_force)
+		await deploy(skill_dir, is_force, command_line_source)
 	} else {
 		help_and_exit(command)
 	}
@@ -80,8 +102,8 @@ async function main(): Promise<void> {
 		handle_help_flag(raw_args)
 	}
 
-	const {command, second_arg, third_arg, comments_mode, is_force} = parse_args(raw_args)
-	await dispatch(command, second_arg, third_arg, comments_mode, is_force)
+	const {command, second_arg, third_arg, comments_mode, is_force, command_line_source} = parse_args(raw_args)
+	await dispatch(command, second_arg, third_arg, comments_mode, is_force, command_line_source)
 }
 
 if (import.meta.main) {

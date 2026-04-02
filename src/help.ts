@@ -33,15 +33,22 @@ Options:
 
 // ** deploy
 const deploy_help = `\
-Usage: skill-shed deploy [skill-dir]
+Usage: skill-shed deploy [skill-dir] [--clean | --workdir | --staged | --ref <ref>]
 
 Deploy a skill to its target directory (configured by TARGET_DIRECTORY in .env).
 
 Arguments:
   skill-dir  Path to the skill directory (default: current directory)
 
-Options:
-  --help, -h  Show this help message`
+Source options (mutually exclusive; default: --clean):
+  --clean        Require clean git repo; deploy working tree
+  --workdir      Deploy working tree as-is (no cleanliness check)
+  --staged       Deploy git index (no cleanliness check)
+  --ref <ref>    Deploy a specific git ref (tag, branch, or commit)
+
+Other options:
+  --force, -f  Overwrite modified files in target directory
+  --help, -h   Show this help message`
 
 // ** help
 const help_help = `\

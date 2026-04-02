@@ -384,19 +384,127 @@ Support deploying skills that consist of more than one file.
 - [[*Skill deployment]]
 - [[*Skill comment stripping]]
 
-** Steps [5/11]
+** Steps [5/12]
 - [X] Implement ~build_manifest_from_dir~: ~readdir~ + dotfile filter, returns ~Map<string, Buffer|string>~
 - [X] Implement `*.source.md` → `*.md` comment stripping for all files in the manifest
 - [X] Implement sidecar read/write and per-file overwrite check (absent/owned/unowned cases)
 - [X] Decide and implement atomicity strategy on partial failure
 - [X] Implement stale-file policy: delete owned files (abort if modified unless --force; ignore unowned)
-- [ ] Replace ~build_manifest_from_dir~ with ~build_manifest_from_git~ (`git ls-files --exclude-standard` + MANIFEST_CMD fallback)
-- [ ] Implement production mode (abort on any unclean git state)
-- [ ] Implement development mode (deploy index or working tree, with reporting)
-- [ ] Implement reading deleted-in-working-tree files from git index
-- [ ] Implement DEPLOY_DOTFILES whitelist in .env
-- [ ] Check config consistency (DEPLOY_DOTFILES lists untracked file; MANIFEST_CMD command not on $PATH)
+- [X] Implement two-tier dispatch + six ~build_manifest_from_*~ functions (stubs for git modes); wire --clean/--workdir/--staged/--ref flags into deploy
+- [ ] Implement ~build_manifest_from_git_clean~: git ls-files + clean check (untracked = dirty)
+- [ ] Implement ~build_manifest_from_git_workdir~: git ls-files (tracked + untracked non-ignored)
+- [ ] Implement ~build_manifest_from_git_staged~: git index; abort if nothing staged
+- [ ] Implement ~build_manifest_from_git_ref~: git archive/show at given ref
+- [ ] Check config consistency (MANIFEST_COMMAND not on $PATH)
+- [ ] Document MANIFEST_COMMAND in README: dotfile deployment, non-git dirs, custom listing
+- [ ] Fix =manifest= initialization in =deploy=: use =let manifest: Manifest = []=, add final =else= guard on inner source-kind dispatch (=process.exit(1)=), remove =!= assertions
 ** Decisions
+*** [2026-04-01] – Use =let manifest: Manifest = []= + explicit else guard; remove =!= assertions
+**** Reason
+=let manifest= (no annotation) infers an undefined-inclusive type, requiring =!= non-null assertions
+on lines 140, 155, and 157.  Initializing to =[] as Manifest= (i.e. =let manifest: Manifest = []=)
+satisfies TypeScript without overriding the type checker.  Adding a final =else= branch to the inner
+source-kind dispatch (printing an error and calling =process.exit(1)=) catches unhandled kinds
+explicitly rather than silently falling through to an empty manifest, which may or may not be caught
+by =validate_manifest=.
+**** Alternatives considered
+- Keep =!= assertions: honest about the tension but fragile; a new unhandled kind silently produces
+  an empty manifest.
+- =let manifest: Manifest | undefined= + explicit guard after the branch: valid, but adds an extra
+  branch; typed initialization is cleaner.
+
+*** [2026-03-31] – Two-tier dispatch: MANIFEST_COMMAND → git (no filesystem fallback tier)
+**** Reason
+The filesystem fallback tier (=build_manifest_from_filesystem=) was a silent fallback for non-git
+dirs.  Removing it makes behavior explicit: if git is absent and =MANIFEST_COMMAND= is unset,
+=deploy= aborts with an actionable error (suggesting =MANIFEST_COMMAND=, =git init=, or installing
+git).  =build_manifest_from_filesystem= had a latent EISDIR bug (directories crash =readFile=);
+removing the tier avoids fixing a function that shouldn't exist.
+=init= adds =# MANIFEST_COMMAND=find . -type f -not -path '*/.*'= as a commented hint (with a
+comment explaining it requires GNU find and is for non-git workflows).  =init= does NOT check for
+git — that's =deploy='s responsibility.
+=build_manifest_from_command= will apply =path.normalize= to all filenames from the command output
+to strip the =./= prefix that =find= emits (otherwise =validate_manifest= fails on =SKILL.md=).
+**** Alternatives considered
+- Keep filesystem fallback, fix EISDIR: adds complexity to a tier that =MANIFEST_COMMAND= already
+  covers; two code paths for the same thing.
+- Silent fallback to filesystem: hides environment problems; produces different manifests than git
+  mode without warning.
+
+*** [2026-03-31] – Five build_manifest_from_* stubs; build_manifest_from_dir as placeholder
+**** Reason
+Full dispatch architecture lands now so future steps only fill in stubs with no structural changes.
+=build_manifest_from_dir= remains as a temporary placeholder for the default (=--clean=) case with
+an explicit TODO comment; it will be replaced by =build_manifest_from_git_clean= once implemented.
+All other stubs throw ='not implemented yet'= to signal planned work, not a permanent gap.
+**** Alternatives considered
+- Implement dispatch incrementally as each function is added: defers structural decisions, risks
+  architectural drift between steps.
+
+*** [2026-03-31] – deploy source flags: --clean (default), --workdir, --staged, --ref <ref>
+Four mutually exclusive flags; no --allow-dirty.
+**** Reason
+Separate boolean flags eliminate keyword/branch-name collision (rejected: single =--from <value>=
+where =workdir= or =staged= could collide with a branch named =workdir= or =staged=).
+No =--allow-dirty= — the flags themselves encode the cleanliness policy (rejected: =--allow-dirty=
+is too generic and creates flag-interaction complexity).
+=--from HEAD= as default rejected: silently deploys stale content after edits (the primary dev loop).
+**** Alternatives considered
+- =--from <value>= with magic values =workdir= / =staged=: keyword/branch collision, silent wrong deploy.
+- =--allow-dirty= boolean alongside =--from=: flag interactions, ambiguous semantics.
+- =--from HEAD= as default: silent stale deploy after editing without committing.
+- =--committed= / =--require-clean= / =--if-clean= / =--strict= as names for the default flag:
+  =--clean= chosen — it's the default so rarely typed; "deploy clean" reads as "deploy clean state".
+
+*** [2026-03-31] – --clean semantics: untracked files count as dirty
+**** Reason
+Untracked skill files that haven't been =git add=-ed would be silently excluded from the manifest,
+causing a confusing validation error ("no entry targets SKILL.md") rather than an actionable message.
+Aborting on untracked files surfaces the real problem early.
+**** Alternatives considered
+- Ignore untracked files in the clean check: valid technically (git ls-files skips them), but hides
+  the "forgot to git add" footgun.
+
+*** [2026-03-31] – --workdir respects .gitignore (uses git ls-files)
+**** Reason
+Using =readdir= for =--workdir= and =git ls-files= for =--clean= would produce different manifests
+on the same clean repo if any gitignored files exist.  Consistent gitignore behavior across modes
+avoids surprises.  =MANIFEST_COMMAND=ls= covers the edge case of intentionally including gitignored
+files.
+**** Alternatives considered
+- =--workdir= uses raw =readdir= (original plan): inconsistency with =--clean= on gitignored files.
+- Add a =--no-git= flag for raw-readdir behavior: unnecessary since =MANIFEST_COMMAND=ls= covers it.
+
+*** [2026-03-31] – Three-tier dispatch: MANIFEST_COMMAND → filesystem → git
+**** Reason
+Covers every deployment environment without ambiguity.  MANIFEST_COMMAND overrides everything
+(full user control).  Filesystem fallback preserves behavior for non-git dirs without requiring
+a flag.  Git modes activate only when git is available.  Passing git flags when git is unavailable
+or MANIFEST_COMMAND is set aborts with a clear error (no silent behavior change).
+Six functions: =build_manifest_from_command=, =build_manifest_from_filesystem=,
+=build_manifest_from_git_clean=, =build_manifest_from_git_workdir=,
+=build_manifest_from_git_staged=, =build_manifest_from_git_ref=.
+**** Alternatives considered
+- Single =build_manifest_from_git= with mode parameter: harder to test, unclear responsibilities.
+- Abort on git-not-present with no fallback: breaks non-git environments.
+
+*** [2026-03-31] – DEPLOY_DOTFILES canceled; MANIFEST_COMMAND covers the use case
+**** Reason
+Git modes include tracked dotfiles naturally via =git ls-files=; to deploy a dotfile, just track
+it.  For non-git dirs or gitignored dotfiles, =MANIFEST_COMMAND= (e.g. =ls -a= or a custom script)
+is the existing escape hatch — a second mechanism for the same edge case adds config surface area
+and test burden for no new capability.
+**** Alternatives considered
+- Keep =DEPLOY_DOTFILES= as a whitelist: redundant with git tracking in the primary use case;
+  redundant with =MANIFEST_COMMAND= in the fallback case.
+
+*** [2026-03-31] – Git detection distinguishes "git not on PATH" vs "not a git repo"
+**** Reason
+Both cases use the filesystem fallback, but the user message must be specific.
+"git not found" and "not a git repository" require different corrective actions.
+=git rev-parse --is-inside-work-tree= surfaces both: ENOENT means git absent, exit 128 means not
+a repo.
+
 *** [2026-03-31] – Linting integrated into deploy (opt-out TBD)
 **** Reason
 Linting is a validation step that naturally belongs in the deploy pipeline.
@@ -628,6 +736,20 @@ into one of two cases, distinguishable via the sidecar:
   harder to reason about.
 - Ignore unowned files: silently accumulates cruft.
 ** Session log
+*** [2026-03-31] (session 3)
+- Completed: step 6 — ~ManifestSource~ type + 5 stubs in ~src/manifest.ts~; two-tier dispatch in
+  ~src/deploy.ts~ (MANIFEST_COMMAND → git modes; ~detect_git~; ~--clean~ placeholder); flags
+  --clean/--workdir/--staged/--ref in ~src/skill-shed.ts~; ~MANIFEST_COMMAND~ hint in ~init.ts~;
+  updated ~src/help.ts~; ~LESSONS.md~ created; auto-git-init + ~active_env_content~ in tests
+- In progress: NONE
+- Next: implement ~build_manifest_from_git_clean~: ~git ls-files --exclude-standard~ + untracked
+  check (untracked = dirty); replace ~build_manifest_from_dir~ placeholder in deploy
+- Blockers: NONE
+- Decisions: two-tier (MANIFEST_COMMAND → git, no filesystem fallback tier); 5 stubs +
+  ~build_manifest_from_dir~ as ~--clean~ placeholder; flags design (4 mutually exclusive);
+  untracked = dirty for ~--clean~; ~--workdir~ uses git ls-files (respects .gitignore);
+  DEPLOY_DOTFILES canceled; git detection distinguishes "not found" vs "not a repo";
+  ~path.normalize~ at ingestion in ~build_manifest_from_command~ (deferred)
 *** [2026-03-31] (session 2)
 - Completed: step 5 — ~find_stale_names~, ~collect_stale_violations~ in ~src/sidecar.ts~;
   stale deletion loop and combined violation check in ~deploy()~; 3 unit + 3 e2e tests

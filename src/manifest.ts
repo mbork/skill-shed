@@ -57,15 +57,46 @@ export function validate_manifest(manifest: Manifest): void {
 	}
 }
 
+// * build_manifest_from_command
+export async function build_manifest_from_command(
+	_skill_dir: string,
+	_command: string,
+): Promise<Manifest> {
+	throw new Error('not implemented yet')
+}
+
+// * build_manifest_from_git_clean
+export async function build_manifest_from_git_clean(_skill_dir: string): Promise<Manifest> {
+	throw new Error('not implemented yet')
+}
+
+// * build_manifest_from_git_workdir
+export async function build_manifest_from_git_workdir(_skill_dir: string): Promise<Manifest> {
+	throw new Error('not implemented yet')
+}
+
+// * build_manifest_from_git_staged
+export async function build_manifest_from_git_staged(_skill_dir: string): Promise<Manifest> {
+	throw new Error('not implemented yet')
+}
+
+// * build_manifest_from_git_ref
+export async function build_manifest_from_git_ref(
+	_skill_dir: string,
+	_ref: string,
+): Promise<Manifest> {
+	throw new Error('not implemented yet')
+}
+
 // * build_manifest_from_dir
-export async function build_manifest_from_dir(dir: string): Promise<Manifest> {
-	const names = (await readdir(dir)).sort()
+export async function build_manifest_from_dir(skill_dir: string): Promise<Manifest> {
+	const names = (await readdir(skill_dir)).sort()
 	const manifest: Manifest = []
 	for (const source_name of names) {
 		if (source_name.startsWith('.')) {
 			continue
 		}
-		const buffer = await readFile(resolve(dir, source_name))
+		const buffer = await readFile(resolve(skill_dir, source_name))
 		const source_content = source_name.endsWith('.md') ? buffer.toString('utf8') : buffer
 		const target_name = target_filename(source_name)
 		const target_content = source_name.endsWith('.source.md')

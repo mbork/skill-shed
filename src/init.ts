@@ -47,7 +47,14 @@ export async function init(skill_dir: string, deploy_dir_arg?: string, comments_
 		console.log(`SKILL.md already exists`)
 	}
 
-	await writeFile(resolve(skill_dir, '.env'), `TARGET_DIRECTORY=${deploy_dir}\n`)
+	await writeFile(resolve(skill_dir, '.env'), `TARGET_DIRECTORY=${deploy_dir}
+# MANIFEST_COMMAND: command to list skill files, one per line (relative paths).
+# Set this if git is not available or you want a non-git workflow.
+# Examples:
+#   GNU find (Linux):   MANIFEST_COMMAND=find . -type f -not -path '*/.*'
+#   BSD find (macOS):   MANIFEST_COMMAND=find . -type f ! -path '*/.*'
+#   Windows (Git Bash): use the GNU find example above
+`)
 
 	if (!is_skill_file_present) {
 		const new_skill_path = resolve(

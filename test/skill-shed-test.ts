@@ -39,6 +39,13 @@ async function run_deploy(skill_dir: string, options: {cwd?: string, flags?: str
 	const env = {...process.env}
 	delete env.TARGET_DIRECTORY
 	const flags = options.flags ?? []
+	// Tests run in non-git temp dirs; git init so deploy passes the git detection check.
+	// The --clean placeholder still uses build_manifest_from_dir, not git ls-files.
+	try {
+		await exec_file('git', ['rev-parse', '--is-inside-work-tree'], {cwd: skill_dir})
+	} catch {
+		await exec_file('git', ['init'], {cwd: skill_dir})
+	}
 	try {
 		const result = await exec_file('node', [script, 'deploy', skill_dir, ...flags], {env, cwd: options.cwd})
 		return {stdout: result.stdout, stderr: result.stderr, code: 0}
@@ -60,6 +67,15 @@ async function run_help(...args: string[]): Promise<Run_result> {
 
 async function make_tmp_dir(): Promise<string> {
 	return mkdtemp(join(tmpdir(), 'skill-shed-test-'))
+}
+
+// Returns non-comment, non-empty lines joined by newline — for asserting .env content
+// without being sensitive to the MANIFEST_COMMAND comment block added by init.
+function strip_env_comments(content: string): string {
+	return content
+		.split('\n')
+		.filter(line => !line.startsWith('#') && line.trim() !== '')
+		.join('\n')
 }
 
 // * Tests
@@ -113,7 +129,7 @@ test('init: creates skill dir, .env, and SKILL.source.md by default', async () =
 		`TARGET_DIRECTORY=${deploy_dir}`,
 	].join('\n'))
 	assert.strictEqual(
-		(await readFile(join(skill_dir, '.env'), 'utf8')).trim(),
+		strip_env_comments(await readFile(join(skill_dir, '.env'), 'utf8')),
 		`TARGET_DIRECTORY=${deploy_dir}`,
 	)
 	assert.strictEqual(
@@ -138,7 +154,7 @@ test('init: --no-comments creates SKILL.md instead', async () => {
 		`TARGET_DIRECTORY=${deploy_dir}`,
 	].join('\n'))
 	assert.strictEqual(
-		(await readFile(join(skill_dir, '.env'), 'utf8')).trim(),
+		strip_env_comments(await readFile(join(skill_dir, '.env'), 'utf8')),
 		`TARGET_DIRECTORY=${deploy_dir}`,
 	)
 	assert.strictEqual(
@@ -163,7 +179,7 @@ test('init: --comments creates SKILL.source.md', async () => {
 		`TARGET_DIRECTORY=${deploy_dir}`,
 	].join('\n'))
 	assert.strictEqual(
-		(await readFile(join(skill_dir, '.env'), 'utf8')).trim(),
+		strip_env_comments(await readFile(join(skill_dir, '.env'), 'utf8')),
 		`TARGET_DIRECTORY=${deploy_dir}`,
 	)
 	assert.strictEqual(
@@ -244,7 +260,7 @@ test('init: creates .env in existing dir', async () => {
 		`TARGET_DIRECTORY=${deploy_dir}`,
 	].join('\n'))
 	assert.strictEqual(
-		(await readFile(join(skill_dir, '.env'), 'utf8')).trim(),
+		strip_env_comments(await readFile(join(skill_dir, '.env'), 'utf8')),
 		`TARGET_DIRECTORY=${deploy_dir}`,
 	)
 	assert.strictEqual((await readFile(join(skill_dir, 'SKILL.md'), 'utf8')).trim(), skill_md_content.trim())
@@ -268,7 +284,7 @@ test('init: default creates .env when SKILL.source.md already exists', async () 
 		`TARGET_DIRECTORY=${deploy_dir}`,
 	].join('\n'))
 	assert.strictEqual(
-		(await readFile(join(skill_dir, '.env'), 'utf8')).trim(),
+		strip_env_comments(await readFile(join(skill_dir, '.env'), 'utf8')),
 		`TARGET_DIRECTORY=${deploy_dir}`,
 	)
 	assert.strictEqual((await readFile(join(skill_dir, 'SKILL.source.md'), 'utf8')).trim(), existing_content.trim())
@@ -291,7 +307,7 @@ test('init: --no-comments creates .env when SKILL.md already exists', async () =
 		`TARGET_DIRECTORY=${deploy_dir}`,
 	].join('\n'))
 	assert.strictEqual(
-		(await readFile(join(skill_dir, '.env'), 'utf8')).trim(),
+		strip_env_comments(await readFile(join(skill_dir, '.env'), 'utf8')),
 		`TARGET_DIRECTORY=${deploy_dir}`,
 	)
 	assert.strictEqual((await readFile(join(skill_dir, 'SKILL.md'), 'utf8')).trim(), existing_content.trim())
@@ -308,7 +324,7 @@ test('init: aborts if .env already exists', async () => {
 	assert.strictEqual(result.code, 1)
 	assert.strictEqual(result.stdout.trim(), '')
 	assert.strictEqual(result.stderr.trim(), `Error: .env already exists in ${skill_dir}`)
-	assert.strictEqual((await readFile(join(skill_dir, '.env'), 'utf8')).trim(), original_env.trim())
+	assert.strictEqual(strip_env_comments(await readFile(join(skill_dir, '.env'), 'utf8')), original_env.trim())
 	const files = await readdir(skill_dir)
 	assert.deepStrictEqual(files.sort(), ['.env'])
 })
@@ -329,7 +345,7 @@ test('init: does not create SKILL.md if it already exists', async () => {
 		`TARGET_DIRECTORY=${deploy_dir}`,
 	].join('\n'))
 	assert.strictEqual(
-		(await readFile(join(skill_dir, '.env'), 'utf8')).trim(),
+		strip_env_comments(await readFile(join(skill_dir, '.env'), 'utf8')),
 		`TARGET_DIRECTORY=${deploy_dir}`,
 	)
 	assert.strictEqual((await readFile(join(skill_dir, 'SKILL.md'), 'utf8')).trim(), original.trim())
@@ -351,7 +367,7 @@ test('init: default deploy dir is ~/.claude/skills/<skill-name>', async () => {
 		`TARGET_DIRECTORY=${expected_deploy_dir}`,
 	].join('\n'))
 	assert.strictEqual(
-		(await readFile(join(skill_dir, '.env'), 'utf8')).trim(),
+		strip_env_comments(await readFile(join(skill_dir, '.env'), 'utf8')),
 		`TARGET_DIRECTORY=${expected_deploy_dir}`,
 	)
 	assert.strictEqual(
@@ -372,7 +388,7 @@ test('init: falls back to ~/.claude/skills when global config is absent', async 
 
 	assert.strictEqual(result.code, 0)
 	const env_content = await readFile(join(skill_dir, '.env'), 'utf8')
-	assert.strictEqual(env_content.trim(), `TARGET_DIRECTORY=${resolve(homedir(), '.claude', 'skills', 'my-skill')}`)
+	assert.strictEqual(strip_env_comments(env_content), `TARGET_DIRECTORY=${resolve(homedir(), '.claude', 'skills', 'my-skill')}`)
 })
 
 test('init: uses default_target_directory from global config when no deploy_dir given', async () => {
@@ -387,7 +403,7 @@ test('init: uses default_target_directory from global config when no deploy_dir 
 
 	assert.strictEqual(result.code, 0)
 	const env_content = await readFile(join(skill_dir, '.env'), 'utf8')
-	assert.strictEqual(env_content.trim(), `TARGET_DIRECTORY=${join(base_dir, 'my-skill')}`)
+	assert.strictEqual(strip_env_comments(env_content), `TARGET_DIRECTORY=${join(base_dir, 'my-skill')}`)
 })
 
 test('init: explicit deploy_dir overrides global config', async () => {
@@ -402,7 +418,7 @@ test('init: explicit deploy_dir overrides global config', async () => {
 
 	assert.strictEqual(result.code, 0)
 	const env_content = await readFile(join(skill_dir, '.env'), 'utf8')
-	assert.strictEqual(env_content.trim(), `TARGET_DIRECTORY=${explicit_dir}`)
+	assert.strictEqual(strip_env_comments(env_content), `TARGET_DIRECTORY=${explicit_dir}`)
 })
 
 // ** Deploy
