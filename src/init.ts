@@ -6,7 +6,11 @@ import {find_target_conflicts} from './manifest.ts'
 import {load_global_config} from './global-config.ts'
 
 // * init
-export async function init(skill_dir: string, deploy_dir_arg?: string, comments_mode: boolean | null = null): Promise<void> {
+export async function init(
+	skill_dir: string,
+	deploy_dir_arg?: string,
+	comments_mode: boolean | null = null,
+): Promise<void> {
 	const skill_name = basename(skill_dir)
 	const config = await load_global_config()
 	const deploy_dir = deploy_dir_arg

@@ -51,7 +51,9 @@ function parse_args(raw_args: string[]): {
 	const comments_mode = values.comments ? true : values['no-comments'] ? false : null
 	const is_force = values.force ?? false
 
-	const command_line_source_flags = [values.clean, values.workdir, values.staged, values.ref !== undefined]
+	const command_line_source_flags = [
+		values.clean, values.workdir, values.staged, values.ref !== undefined,
+	]
 		.filter(Boolean)
 	if (command_line_source_flags.length > 1) {
 		console.error('Error: --clean, --workdir, --staged, and --ref are mutually exclusive')
@@ -102,7 +104,9 @@ async function main(): Promise<void> {
 		handle_help_flag(raw_args)
 	}
 
-	const {command, second_arg, third_arg, comments_mode, is_force, command_line_source} = parse_args(raw_args)
+	const {
+		command, second_arg, third_arg, comments_mode, is_force, command_line_source,
+	} = parse_args(raw_args)
 	await dispatch(command, second_arg, third_arg, comments_mode, is_force, command_line_source)
 }
 

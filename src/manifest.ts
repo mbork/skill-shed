@@ -1,6 +1,7 @@
 // A manifest is an array of ManifestEntry objects, one per file to deploy.
 // source_content: string for .md files, Buffer for all others.
-// target_content: string for .md targets (always, after any transform), Buffer for binary pass-throughs.
+// target_content: string for .md targets (always, after any transform), Buffer for binary
+// pass-throughs.
 
 // * Imports
 

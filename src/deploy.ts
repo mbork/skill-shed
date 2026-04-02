@@ -14,7 +14,14 @@ import {
 } from './manifest.ts'
 
 const execFile = promisify(execFile_cb)
-import {collect_overwrite_violations, collect_stale_violations, find_stale_names, hash_content, read_sidecar, write_sidecar} from './sidecar.ts'
+import {
+	collect_overwrite_violations,
+	collect_stale_violations,
+	find_stale_names,
+	hash_content,
+	read_sidecar,
+	write_sidecar,
+} from './sidecar.ts'
 
 // * ManifestSource
 export type ManifestSource
@@ -118,11 +125,16 @@ export async function deploy(
 	} else {
 		const git_status = await detect_git(skill_dir)
 		if (git_status === 'no-git') {
-			console.error('Error: git not found; install git and run `git init`, or set MANIFEST_COMMAND in .env')
+			console.error(
+				'Error: git not found; install git and run `git init`,'
+				+ ' or set MANIFEST_COMMAND in .env',
+			)
 			process.exit(1)
 		}
 		if (git_status === 'no-repo') {
-			console.error('Error: not a git repository; run `git init` or set MANIFEST_COMMAND in .env')
+			console.error(
+				'Error: not a git repository; run `git init` or set MANIFEST_COMMAND in .env',
+			)
 			process.exit(1)
 		}
 		if (manifest_source.kind === 'workdir') {
@@ -135,7 +147,8 @@ export async function deploy(
 			// TODO: replace with build_manifest_from_git_clean once implemented
 			manifest = await build_manifest_from_dir(skill_dir)
 		} else {
-			console.error(`Error: unhandled manifest source kind: ${(manifest_source as {kind: string}).kind}`)
+			const kind = (manifest_source as {kind: string}).kind
+			console.error(`Error: unhandled manifest source kind: ${kind}`)
 			process.exit(1)
 		}
 	}
@@ -157,8 +170,12 @@ export async function deploy(
 	const existing_sidecar = await read_sidecar(absolute_target_dir)
 
 	const stale_names = find_stale_names(manifest, existing_sidecar)
-	const stale_violations = await collect_stale_violations(stale_names, absolute_target_dir, existing_sidecar)
-	const overwrite_violations = await collect_overwrite_violations(manifest, absolute_target_dir, existing_sidecar)
+	const stale_violations = await collect_stale_violations(
+		stale_names, absolute_target_dir, existing_sidecar,
+	)
+	const overwrite_violations = await collect_overwrite_violations(
+		manifest, absolute_target_dir, existing_sidecar,
+	)
 	const all_violations = [...stale_violations, ...overwrite_violations]
 	if (all_violations.length > 0 && !is_force) {
 		for (const v of all_violations) {
