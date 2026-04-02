@@ -10,6 +10,7 @@ import {
 	build_manifest_from_git_staged,
 	build_manifest_from_git_ref,
 	validate_manifest,
+	type Manifest,
 } from './manifest.ts'
 
 const execFile = promisify(execFile_cb)
@@ -111,7 +112,7 @@ export async function deploy(
 		? {kind: 'command', command: manifest_command}
 		: command_line_source
 
-	let manifest
+	let manifest: Manifest = []
 	if (manifest_source.kind === 'command') {
 		manifest = await build_manifest_from_command(skill_dir, manifest_source.command)
 	} else {
@@ -133,11 +134,14 @@ export async function deploy(
 		} else if (manifest_source.kind === 'clean') {
 			// TODO: replace with build_manifest_from_git_clean once implemented
 			manifest = await build_manifest_from_dir(skill_dir)
+		} else {
+			console.error(`Error: unhandled manifest source kind: ${(manifest_source as {kind: string}).kind}`)
+			process.exit(1)
 		}
 	}
 
 	try {
-		validate_manifest(manifest!)
+		validate_manifest(manifest)
 	} catch (e: unknown) {
 		console.error(`Error: ${(e as Error).message}`)
 		process.exit(1)
@@ -152,9 +156,9 @@ export async function deploy(
 
 	const existing_sidecar = await read_sidecar(absolute_target_dir)
 
-	const stale_names = find_stale_names(manifest!, existing_sidecar)
+	const stale_names = find_stale_names(manifest, existing_sidecar)
 	const stale_violations = await collect_stale_violations(stale_names, absolute_target_dir, existing_sidecar)
-	const overwrite_violations = await collect_overwrite_violations(manifest!, absolute_target_dir, existing_sidecar)
+	const overwrite_violations = await collect_overwrite_violations(manifest, absolute_target_dir, existing_sidecar)
 	const all_violations = [...stale_violations, ...overwrite_violations]
 	if (all_violations.length > 0 && !is_force) {
 		for (const v of all_violations) {
@@ -165,7 +169,7 @@ export async function deploy(
 
 	await write_sentinel(absolute_target_dir)
 
-	for (const entry of manifest!) {
+	for (const entry of manifest) {
 		const source_path = resolve(skill_dir, entry.source_name)
 		const target_path = resolve(absolute_target_dir, entry.target_name)
 		await writeFile(target_path, entry.target_content)
@@ -186,7 +190,7 @@ export async function deploy(
 	}
 
 	const new_sidecar = {version: 1, files: {} as Record<string, string>}
-	for (const entry of manifest!) {
+	for (const entry of manifest) {
 		new_sidecar.files[entry.target_name] = hash_content(entry.target_content)
 	}
 	await write_sidecar(absolute_target_dir, new_sidecar)
