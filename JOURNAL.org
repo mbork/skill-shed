@@ -404,7 +404,7 @@ Support deploying skills that consist of more than one file.
 - [[*Skill deployment]]
 - [[*Skill comment stripping]]
 
-** Steps [8/13]
+** Steps [9/13]
 - [X] Implement ~build_manifest_from_dir~: ~readdir~ + dotfile filter, returns ~Map<string, Buffer|string>~
 - [X] Implement `*.source.md` → `*.md` comment stripping for all files in the manifest
 - [X] Implement sidecar read/write and per-file overwrite check (absent/owned/unowned cases)
@@ -412,7 +412,7 @@ Support deploying skills that consist of more than one file.
 - [X] Implement stale-file policy: delete owned files (abort if modified unless --force; ignore unowned)
 - [X] Implement two-tier dispatch + six ~build_manifest_from_*~ functions (stubs for git modes); wire --clean/--workdir/--staged/--ref flags into deploy
 - [X] Implement ~build_manifest_from_git_clean~: git ls-files + clean check (untracked = dirty)
-- [ ] Implement ~build_manifest_from_git_workdir~: git ls-files (tracked + untracked non-ignored)
+- [X] Implement ~build_manifest_from_git_workdir~: git ls-files (tracked + untracked non-ignored)
 - [ ] Implement ~build_manifest_from_git_staged~: git index; abort if nothing staged
 - [ ] Implement ~build_manifest_from_git_ref~: git archive/show at given ref
 - [ ] Check config consistency (MANIFEST_COMMAND not on $PATH)

@@ -95,8 +95,62 @@ export async function build_manifest_from_git_clean(skill_dir: string): Promise<
 }
 
 // * build_manifest_from_git_workdir
-export async function build_manifest_from_git_workdir(_skill_dir: string): Promise<Manifest> {
-	throw new Error('not implemented yet')
+export async function build_manifest_from_git_workdir(skill_dir: string): Promise<Manifest> {
+	// All files committed to HEAD (base set); empty string on no-commit repo
+	let ls_tree_result
+	try {
+		ls_tree_result = await execFile(
+			'git', ['ls-tree', '-r', '-z', 'HEAD', '--name-only'], {cwd: skill_dir},
+		)
+	} catch {
+		ls_tree_result = {stdout: ''}
+	}
+	const names = new Set(ls_tree_result.stdout.split('\0').filter(Boolean))
+	// Changes relative to HEAD: staged additions/renames, untracked non-ignored files
+	const status_result = await execFile(
+		'git', ['status', '--porcelain', '-z', '--', '.'], {cwd: skill_dir},
+	)
+	const file_tokens = status_result.stdout.split('\0')
+	let i = 0
+	while (i < file_tokens.length) {
+		const token = file_tokens[i]
+		if (!token) {
+			i++
+			continue
+		}
+		const x = token[0]
+		const filename = token.slice(3)
+		if (x === '?' || x === 'A') {
+			// y === 'D' (staged add + deleted from disk) handled by ENOENT below
+			names.add(filename)
+		} else if (x === 'R' || x === 'C') {
+			names.add(filename)
+			i++ // consume old-name token; ENOENT handles old file being gone from disk
+		}
+		// other statuses: file already in names from ls-tree, or deleted from disk (ENOENT)
+		i++
+	}
+	const sorted_names = [...names].sort()
+	const entries = await Promise.all(sorted_names.map(async (source_name) => {
+		const full_path = resolve(skill_dir, source_name)
+		let buffer: Buffer
+		try {
+			buffer = await readFile(full_path)
+		} catch (e: unknown) {
+			const code = (e as NodeJS.ErrnoException).code
+			if (code === 'ENOENT' || code === 'EISDIR') {
+				return null // not a readable file (gone from disk, or untracked directory) -- skip
+			}
+			throw e
+		}
+		const source_content = source_name.endsWith('.md') ? buffer.toString('utf8') : buffer
+		const target_name = target_filename(source_name)
+		const target_content = source_name.endsWith('.source.md')
+			? strip_html_comments(source_content as string)
+			: source_content
+		return {source_name, target_name, source_content, target_content}
+	}))
+	return entries.filter((e): e is ManifestEntry => e !== null)
 }
 
 // * build_manifest_from_git_staged
