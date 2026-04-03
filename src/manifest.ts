@@ -7,7 +7,7 @@
 
 import {execFile as execFile_cb} from 'node:child_process'
 import {readdir, readFile} from 'node:fs/promises'
-import {resolve} from 'node:path'
+import {relative, resolve} from 'node:path'
 import {promisify} from 'node:util'
 import {strip_html_comments} from './strip-html-comments.ts'
 
@@ -102,6 +102,8 @@ export async function build_manifest_from_git_clean(skill_dir: string): Promise<
 // * build_manifest_from_git_workdir
 export async function build_manifest_from_git_workdir(skill_dir: string): Promise<Manifest> {
 	// All files committed to HEAD (base set); empty string on no-commit repo
+	const git_root =
+		(await execFile('git', ['rev-parse', '--show-toplevel'], {cwd: skill_dir})).stdout.trim();
 	let ls_tree_result
 	try {
 		ls_tree_result = await execFile(
@@ -124,7 +126,7 @@ export async function build_manifest_from_git_workdir(skill_dir: string): Promis
 			continue
 		}
 		const x = token[0]
-		const filename = token.slice(3)
+		const filename = relative(skill_dir, resolve(git_root, token.slice(3)))
 		if (x === '?' || x === 'A') {
 			// y === 'D' (staged add + deleted from disk) handled by ENOENT below
 			names.add(filename)

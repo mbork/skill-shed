@@ -58,6 +58,24 @@ test('build_manifest_from_git_workdir: scoped to skill_dir in a larger repo', as
 	assert.deepStrictEqual(manifest.map(e => e.source_name), ['SKILL.md'])
 })
 
+test('build_manifest_from_git_workdir: untracked file in skill_dir subdirectory has correct source_name', async () => {
+	// Regression: git status --porcelain returns repo-root-relative paths,
+	// so files in a subdirectory must be re-relativized to skill_dir.
+	const parent = await make_tmp_dir()
+	await setup_git(parent)
+	const skill_dir = join(parent, 'my-skill')
+	await mkdir(skill_dir)
+	await writeFile(join(skill_dir, 'SKILL.md'), 'committed')
+	await exec_file('git', ['add', '-A'], {cwd: parent})
+	await exec_file('git', ['commit', '-m', 'test'], {cwd: parent})
+	await writeFile(join(skill_dir, 'extra.txt'), 'untracked')
+
+	const manifest = await build_manifest_from_git_workdir(skill_dir)
+
+	assert.deepStrictEqual(manifest.map(e => e.source_name), ['SKILL.md', 'extra.txt'])
+	assert.deepStrictEqual(manifest[1].target_content, Buffer.from('untracked'))
+})
+
 // ** Content
 
 test('build_manifest_from_git_workdir: reads modified content from disk', async () => {
