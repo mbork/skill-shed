@@ -11,7 +11,7 @@ export interface Global_config {
 
 // * Constants
 const DEFAULT_CONFIG: Global_config = {
-	default_target_directory: resolve(homedir(), '.claude', 'skills'),
+	default_target_directory: resolve(homedir(), '.agents', 'skills'),
 }
 
 // * load_global_config

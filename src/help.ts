@@ -12,7 +12,7 @@ Commands:
   help    Show help for a command
 
 Global config: $SKILL_SHED_CONFIG (default: ~/.skill-shed.env, dotenv format)
-  DEFAULT_TARGET_DIRECTORY  Base path for skill deployment (default: ~/.claude/skills/)
+  DEFAULT_TARGET_DIRECTORY  Base path for skill deployment (default: ~/.agents/skills/)
 
 Run 'skill-shed help <command>' for detailed usage.`
 

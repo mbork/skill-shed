@@ -75,10 +75,9 @@ the installation will become much simpler.
 #+begin_src shell
   skill-shed init my-useful-skill
 #+end_src
-creates a directory ~my-useful-skill~ with two files: ~.env~ (see
-/Configure/ below) and ~SKILL.source.md~, containing a template skill
-frontmatter, a HTML comment and a stub to fill with the skill's
-contents:
+creates a directory ~my-useful-skill~ with two files: ~.env~ and
+~SKILL.source.md~, containing a template skill frontmatter, a HTML
+comment and a stub to fill with the skill's contents:
 #+begin_example
   ---
   name: {{name}}
@@ -109,9 +108,9 @@ in the same directory where you issued the ~init~ command, or just
   skill-shed deploy
 #+end_src
 in the newly created skill's directory – and all your skill's files
-will be copied to the target directory (=~/.claude/skills= by default,
-see /Configure/ below), with all files ending in ~.source.md~ renamed
-to ~.md~ and with the comments stripped.
+will be copied to the target directory (=~/.agents/skills= by
+default), with all files ending in ~.source.md~ renamed to ~.md~ and
+with the comments stripped.
 
 * Usage
 ** Initialize a skill directory
@@ -121,7 +120,7 @@ to ~.md~ and with the comments stripped.
 If ~<skill-directory>~ is not supplied, current directory is assumed.
 If ~<deploy-directory>~ is supplied, it is copied to ~.env~ in the
 ~<skill-directory>~; otherwise, the skill will be deployed under the
-default target directory (see /Configure/ below).
+default target directory (see /Configuration/ below).
 
 If ~--comments~ is issued (the default), a file called
 ~SKILL.source.md~ containing a generic template will be created in
@@ -159,20 +158,21 @@ and filename shortened to ~reference.md~.
 environment variable ~SKILL_SHED_CONFIG~ to where you want your config
 to live.)  As of now, the only setting there is
 ~DEFAULT_TARGET_DIRECTORY~.  For example, if you use [[https://openai.com/codex/][Codex]] or [[https://geminicli.com/][Gemini
-CLI]], your config should look like this:
+CLI]], your config might look like this
 #+begin_src shell
   DEFAULT_TARGET_DIRECTORY=~/.agents/skills
 #+end_src
+(or not exist at all, since this is the default).
+
 If you use [[https://github.com/features/copilot][Copilot]], you can use
 #+begin_src shell
   DEFAULT_TARGET_DIRECTORY=~/.copilot/skills
 #+end_src
+
 And if you use [[https://claude.com/product/claude-code][Claude Code]], you may set
 #+begin_src shell
   DEFAULT_TARGET_DIRECTORY=~/.claude/skills
 #+end_src
-or not create the config at all (since I use Claude, this is the
-default).
 
 Apart from that, every skill managed by ~skill-shed~ has its own
 little config – the ~.env~ file in the skill's directory.  Like with
@@ -186,6 +186,6 @@ changed anytime even without touching the default.
 
 * Development
 - ~npm ci~ to populate ~./node_modules~
-- ~npm test~ to run tests
+- ~npm test~ to run tests (requires Git)
 - ~npm run typecheck~ to check typing
 - ~npm run lint~ to Eslint-check the source code

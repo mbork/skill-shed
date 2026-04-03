@@ -368,7 +368,7 @@ test('init: does not create SKILL.md if it already exists', async () => {
 	assert.deepStrictEqual(files.sort(), ['.env', 'SKILL.md'])
 })
 
-test('init: default deploy dir is ~/.claude/skills/<skill-name>', async () => {
+test('init: default deploy dir is ~/.agents/skills/<skill-name>', async () => {
 	const parent = await make_tmp_dir()
 	const skill_dir = join(parent, 'my-skill')
 
@@ -376,7 +376,7 @@ test('init: default deploy dir is ~/.claude/skills/<skill-name>', async () => {
 
 	assert.strictEqual(result.code, 0)
 	assert.strictEqual(result.stderr.trim(), '')
-	const expected_deploy_dir = resolve(homedir(), '.claude', 'skills', basename(skill_dir))
+	const expected_deploy_dir = resolve(homedir(), '.agents', 'skills', basename(skill_dir))
 	assert.strictEqual(result.stdout.trim(), [
 		`Initialized ${skill_dir}`,
 		`TARGET_DIRECTORY=${expected_deploy_dir}`,
@@ -394,7 +394,7 @@ test('init: default deploy dir is ~/.claude/skills/<skill-name>', async () => {
 	assert.deepStrictEqual(files.sort(), ['.env', 'SKILL.source.md'])
 })
 
-test('init: falls back to ~/.claude/skills when global config is absent', async () => {
+test('init: falls back to ~/.agents/skills when global config is absent', async () => {
 	const parent = await make_tmp_dir()
 	const skill_dir = join(parent, 'my-skill')
 	const nonexistent_config = join(await make_tmp_dir(), 'nonexistent.json')
@@ -404,7 +404,7 @@ test('init: falls back to ~/.claude/skills when global config is absent', async 
 
 	assert.strictEqual(result.code, 0)
 	const env_content = await readFile(join(skill_dir, '.env'), 'utf8')
-	assert.strictEqual(strip_env_comments(env_content), `TARGET_DIRECTORY=${resolve(homedir(), '.claude', 'skills', 'my-skill')}`)
+	assert.strictEqual(strip_env_comments(env_content), `TARGET_DIRECTORY=${resolve(homedir(), '.agents', 'skills', 'my-skill')}`)
 })
 
 test('init: uses default_target_directory from global config when no deploy_dir given', async () => {
@@ -1641,7 +1641,7 @@ test('load_global_config: missing config file returns defaults', async () => {
 	process.env.SKILL_SHED_CONFIG = nonexistent
 	try {
 		const config = await load_global_config()
-		assert.strictEqual(config.default_target_directory, resolve(homedir(), '.claude', 'skills'))
+		assert.strictEqual(config.default_target_directory, resolve(homedir(), '.agents', 'skills'))
 	} finally {
 		delete process.env.SKILL_SHED_CONFIG
 	}
@@ -1712,7 +1712,7 @@ test('load_global_config: empty DEFAULT_TARGET_DIRECTORY falls back to default',
 	process.env.SKILL_SHED_CONFIG = config_file
 	try {
 		const config = await load_global_config()
-		assert.strictEqual(config.default_target_directory, resolve(homedir(), '.claude', 'skills'))
+		assert.strictEqual(config.default_target_directory, resolve(homedir(), '.agents', 'skills'))
 	} finally {
 		delete process.env.SKILL_SHED_CONFIG
 	}
