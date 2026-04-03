@@ -76,6 +76,26 @@ test('build_manifest_from_git_workdir: untracked file in skill_dir subdirectory 
 	assert.deepStrictEqual(manifest[1].target_content, Buffer.from('untracked'))
 })
 
+test('build_manifest_from_git_workdir: skill_dir wholly untracked in a larger repo', async () => {
+	// Regression: git status --porcelain collapses a wholly-untracked directory
+	// into a single `?? my-skill/` entry rather than listing individual files.
+	const parent = await make_tmp_dir()
+	await setup_git(parent)
+	await writeFile(join(parent, 'root.md'), 'root')
+	await exec_file('git', ['add', '-A'], {cwd: parent})
+	await exec_file('git', ['commit', '-m', 'initial'], {cwd: parent})
+	const skill_dir = join(parent, 'my-skill')
+	await mkdir(skill_dir)
+	await writeFile(join(skill_dir, 'SKILL.md'), 'hello')
+	await writeFile(join(skill_dir, 'extra.txt'), 'world')
+
+	const manifest = await build_manifest_from_git_workdir(skill_dir)
+
+	assert.deepStrictEqual(manifest.map(e => e.source_name), ['SKILL.md', 'extra.txt'])
+	assert.strictEqual(manifest[0].target_content, 'hello')
+	assert.deepStrictEqual(manifest[1].target_content, Buffer.from('world'))
+})
+
 // ** Content
 
 test('build_manifest_from_git_workdir: reads modified content from disk', async () => {
@@ -253,7 +273,7 @@ test('build_manifest_from_git_workdir: excludes ignored files', async () => {
 	assert.deepStrictEqual(manifest.map(e => e.source_name), ['SKILL.md'])
 })
 
-test('build_manifest_from_git_workdir: ignores untracked directory', async () => {
+test('build_manifest_from_git_workdir: includes files in untracked subdirectory', async () => {
 	const dir = await make_tmp_dir()
 	await setup_git(dir)
 	await writeFile(join(dir, 'SKILL.md'), 'hello')
@@ -263,6 +283,7 @@ test('build_manifest_from_git_workdir: ignores untracked directory', async () =>
 
 	const manifest = await build_manifest_from_git_workdir(dir)
 
-	assert.deepStrictEqual(manifest.map(e => e.source_name), ['SKILL.md'])
+	assert.deepStrictEqual(manifest.map(e => e.source_name), ['SKILL.md', 'subdir/file.txt'])
 	assert.strictEqual(manifest[0].target_content, 'hello')
+	assert.deepStrictEqual(manifest[1].target_content, Buffer.from('content'))
 })

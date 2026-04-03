@@ -115,7 +115,9 @@ export async function build_manifest_from_git_workdir(skill_dir: string): Promis
 	const names = new Set(ls_tree_result.stdout.split('\0').filter(Boolean))
 	// Changes relative to HEAD: staged additions/renames, untracked non-ignored files
 	const status_result = await execFile(
-		'git', ['status', '--porcelain', '-z', '--', '.'], {cwd: skill_dir},
+		'git',
+		['status', '--porcelain', '-z', '--untracked-files=all', '--', '.'],
+		{cwd: skill_dir},
 	)
 	const file_tokens = status_result.stdout.split('\0')
 	let i = 0
