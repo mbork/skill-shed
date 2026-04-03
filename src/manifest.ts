@@ -35,6 +35,16 @@ export function target_filename(source: string): string {
 	return source.replace(SOURCE_SUFFIX_RE, '.md')
 }
 
+// * make_manifest_entry
+function make_manifest_entry(source_name: string, buffer: Buffer): ManifestEntry {
+	const source_content = source_name.endsWith('.md') ? buffer.toString('utf8') : buffer
+	const target_name = target_filename(source_name)
+	const target_content = source_name.endsWith('.source.md')
+		? strip_html_comments(source_content as string)
+		: source_content
+	return {source_name, target_name, source_content, target_content}
+}
+
 // * find_target_conflicts
 // Returns one group per conflicting target: each group lists the source names
 // that all resolve to the same target_name.  Returns [] when there are no conflicts.
@@ -84,12 +94,7 @@ export async function build_manifest_from_git_clean(skill_dir: string): Promise<
 	const names = ls_result.stdout.split('\n').filter(Boolean).sort()
 	const manifest: Manifest = await Promise.all(names.map(async (source_name) => {
 		const buffer = await readFile(resolve(skill_dir, source_name))
-		const source_content = source_name.endsWith('.md') ? buffer.toString('utf8') : buffer
-		const target_name = target_filename(source_name)
-		const target_content = source_name.endsWith('.source.md')
-			? strip_html_comments(source_content as string)
-			: source_content
-		return {source_name, target_name, source_content, target_content}
+		return make_manifest_entry(source_name, buffer)
 	}))
 	return manifest
 }
@@ -143,12 +148,7 @@ export async function build_manifest_from_git_workdir(skill_dir: string): Promis
 			}
 			throw e
 		}
-		const source_content = source_name.endsWith('.md') ? buffer.toString('utf8') : buffer
-		const target_name = target_filename(source_name)
-		const target_content = source_name.endsWith('.source.md')
-			? strip_html_comments(source_content as string)
-			: source_content
-		return {source_name, target_name, source_content, target_content}
+		return make_manifest_entry(source_name, buffer)
 	}))
 	return entries.filter((e): e is ManifestEntry => e !== null)
 }
@@ -175,12 +175,7 @@ export async function build_manifest_from_dir(skill_dir: string): Promise<Manife
 			continue
 		}
 		const buffer = await readFile(resolve(skill_dir, source_name))
-		const source_content = source_name.endsWith('.md') ? buffer.toString('utf8') : buffer
-		const target_name = target_filename(source_name)
-		const target_content = source_name.endsWith('.source.md')
-			? strip_html_comments(source_content as string)
-			: source_content
-		manifest.push({source_name, target_name, source_content, target_content})
+		manifest.push(make_manifest_entry(source_name, buffer))
 	}
 	return manifest
 }
