@@ -186,6 +186,6 @@ changed anytime even without touching the default.
 
 * Development
 - ~npm ci~ to populate ~./node_modules~
-- ~npm test~ to run tests (requires Git)
+- ~npm test~ to run all tests (requires Git); to run a single section, e.g. ~npm test test/deploy.test.ts~
 - ~npm run typecheck~ to check typing
 - ~npm run lint~ to Eslint-check the source code

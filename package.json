@@ -28,7 +28,7 @@
   },
   "scripts": {
     "lint": "eslint .",
-    "test": "node test/skill-shed-test.ts",
+    "test": "node --test",
     "typecheck": "tsgo --noEmit"
   },
   "devDependencies": {
