@@ -12,6 +12,7 @@ import {
 	validate_manifest,
 	type Manifest,
 } from './manifest.ts'
+import {expand_tilde} from './utils.ts'
 
 const execFile = promisify(execFile_cb)
 import {
@@ -78,7 +79,7 @@ async function read_skill_env(skill_dir: string): Promise<{
 	}
 	const env = parseEnv(env_content)
 
-	const target_dir = env.TARGET_DIRECTORY
+	const target_dir = expand_tilde(env.TARGET_DIRECTORY ?? '')
 	if (!target_dir) {
 		console.error('Error: TARGET_DIRECTORY not set in .env')
 		process.exit(1)

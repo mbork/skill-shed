@@ -102,8 +102,8 @@ export async function build_manifest_from_git_clean(skill_dir: string): Promise<
 // * build_manifest_from_git_workdir
 export async function build_manifest_from_git_workdir(skill_dir: string): Promise<Manifest> {
 	// All files committed to HEAD (base set); empty string on no-commit repo
-	const git_root =
-		(await execFile('git', ['rev-parse', '--show-toplevel'], {cwd: skill_dir})).stdout.trim();
+	const git_root
+		= (await execFile('git', ['rev-parse', '--show-toplevel'], {cwd: skill_dir})).stdout.trim()
 	let ls_tree_result
 	try {
 		ls_tree_result = await execFile(

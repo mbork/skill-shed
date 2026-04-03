@@ -3,6 +3,7 @@ import {readFile} from 'node:fs/promises'
 import {resolve} from 'node:path'
 import {homedir} from 'node:os'
 import {parseEnv} from 'node:util'
+import {expand_tilde} from './utils.ts'
 
 // * Types
 export interface Global_config {
@@ -22,8 +23,8 @@ export async function load_global_config(): Promise<Global_config> {
 		const raw = await readFile(config_path, 'utf8')
 		const parsed = parseEnv(raw)
 		return {
-			default_target_directory: parsed.DEFAULT_TARGET_DIRECTORY
-				|| DEFAULT_CONFIG.default_target_directory,
+			default_target_directory: expand_tilde(parsed.DEFAULT_TARGET_DIRECTORY
+				|| DEFAULT_CONFIG.default_target_directory),
 		}
 	} catch (e: unknown) {
 		if ((e as NodeJS.ErrnoException).code === 'ENOENT') {

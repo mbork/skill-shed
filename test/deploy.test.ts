@@ -1,8 +1,9 @@
 // * Imports
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {writeFile, readFile, readdir, mkdir, stat, unlink} from 'node:fs/promises'
-import {join} from 'node:path'
+import {writeFile, readFile, readdir, mkdir, rmdir, stat, unlink} from 'node:fs/promises'
+import {join, resolve} from 'node:path'
+import {homedir} from 'node:os'
 import {SIDECAR_FILENAME, find_stale_names, hash_content} from '../src/sidecar.ts'
 import {run_deploy, make_tmp_dir} from './helpers.ts'
 
@@ -25,6 +26,24 @@ test('deploy: missing TARGET_DIRECTORY in .env', async () => {
 
 	assert.strictEqual(result.code, 1)
 	assert.match(result.stderr, /TARGET_DIRECTORY not set/)
+})
+
+test('deploy: expands ~ in TARGET_DIRECTORY', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_name = `skill-shed-tilde-test-${Date.now()}`
+	const target_dir = resolve(homedir(), target_name)
+	await writeFile(join(skill_dir, 'SKILL.md'), 'content')
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=~/${target_name}\n`)
+	try {
+		const result = await run_deploy(skill_dir)
+		assert.strictEqual(result.code, 0)
+		const deployed = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
+		assert.strictEqual(deployed, 'content')
+	} finally {
+		await unlink(join(target_dir, 'SKILL.md'))
+		await unlink(join(target_dir, SIDECAR_FILENAME))
+		await rmdir(target_dir)
+	}
 })
 
 test('deploy: missing SKILL.md and SKILL.source.md', async () => {
