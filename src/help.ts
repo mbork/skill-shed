@@ -47,7 +47,8 @@ Source options (mutually exclusive; default: --clean):
   --ref <ref>    Deploy a specific git ref (tag, branch, or commit)
 
 Other options:
-  --force, -f  Overwrite modified files in target directory
+  --force, -f  Overwrite modified files in target directory;
+               do not abort if previous deployment was interrupted
   --help, -h   Show this help message`
 
 // ** help
