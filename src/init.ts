@@ -89,7 +89,9 @@ export async function init(
 	} catch (e: unknown) {
 		const err = e as NodeJS.ErrnoException & {stderr?: string}
 		if (err.code === 'ENOENT' || err.stderr?.includes('not a git repository')) {
-			env_message.push(`don't forget to add it to .gitignore if you initialize a Git repo later`)
+			env_message.push(
+				`don't forget to add it to .gitignore if you initialize a Git repo later`,
+			)
 		} else {
 			env_message.push(`add it to .gitignore`)
 		}
