@@ -289,8 +289,10 @@ test('init: does not create SKILL.md if it already exists', async () => {
 test('init: default deploy dir is ~/.agents/skills/<skill-name>', async () => {
 	const parent = await make_tmp_dir()
 	const skill_dir = join(parent, 'my-skill')
+	const nonexistent_config = join(await make_tmp_dir(), 'nonexistent.json')
+	const env = {...process.env, SKILL_SHED_CONFIG: nonexistent_config}
 
-	const result = await run_init(skill_dir)
+	const result = await run_init(skill_dir, undefined, [], {env})
 
 	assert.strictEqual(result.code, 0)
 	assert.strictEqual(result.stderr.trim(), '')
