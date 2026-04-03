@@ -769,6 +769,18 @@ into one of two cases, distinguishable via the sidecar:
   harder to reason about.
 - Ignore unowned files: silently accumulates cruft.
 ** Session log
+*** [2026-04-03] (session 6)
+- Completed: implemented `build_manifest_from_git_workdir` (step 8 in Steps); refactored code
+  (split monolithic test file into per-section modules); changed default target directory to
+  `~/.agents/skills`; added `~` expansion in `TARGET_DIRECTORY` / `DEFAULT_TARGET_DIRECTORY`;
+  fixed `build_manifest_from_git_workdir` for wholly-untracked `skill_dir` (added
+  `--untracked-files=all` to `git status` call in `src/manifest.ts`); corrected the
+  "ignores untracked directory" test (wrong behavior) → "includes files in untracked subdirectory"
+- In progress: NONE
+- Next: implement `build_manifest_from_git_staged` (step 9 in Steps)
+- Blockers: NONE
+- Decisions: `--untracked-files=all` is the right fix — bypasses git's directory-collapsing
+  heuristic while still respecting `.gitignore`; "ignores untracked directory" was a mistaken test
 *** [2026-04-02] (session 5)
 - Completed: implemented `build_manifest_from_git_clean` (`src/manifest.ts`); wired into
   `src/deploy.ts` (try/catch, `mkdir` per file, import swap); updated `run_deploy` test helper
