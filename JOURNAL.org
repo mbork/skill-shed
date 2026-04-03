@@ -5,6 +5,24 @@ A set of tools (in the form of a Node.js CLI script) for managing
 agent skills: format conversion, comment stripping, linting,
 deployment.  Currently in WiP/PoC stage.
 
+* TODO Expand =README.org= to cover all implemented features
+** Steps [/]
+- [ ] Document =MANIFEST_COMMAND= in =.skill.env=: custom shell command to list skill files (one per line, relative paths); include GNU/BSD find examples; explain use for non-git dirs
+- [ ] Document sidecar file (=.skill-shed-manifest.json= in target dir): SHA-256 hashes of deployed files, drives overwrite/stale detection
+- [ ] Document sentinel file (=.skill-shed-deploy-in-progress= in target dir): written during deploy, detects interruptions; explain how =--force= clears it
+- [ ] Document overwrite and stale file detection: conditions that abort deploy, what =--force= does for each case
+- [ ] Document manifest validation rules: skill must have a file targeting =SKILL.md=; no two sources may resolve to the same target name
+- [ ] Document =~= expansion in =TARGET_DIRECTORY= and =DEFAULT_TARGET_DIRECTORY=
+- [ ] Document that relative =TARGET_DIRECTORY= is resolved against =skill_dir=, not =cwd=
+- [ ] Document =.source.md= → =.md= transformation as a general pattern (not just =SKILL.source.md=)
+- [ ] Clarify =--force= has two distinct purposes: overwrite modified files + resume interrupted deploy
+- [ ] Document git error states: =no-git= (git not installed) vs =no-repo= (not in a git repo), and their respective error messages
+- [ ] Document =SKILL_SHED_CONFIG= env var for overriding the global config file path
+- [ ] Document =help= subcommand and =-h= alias for =--help=
+- [ ] Clarify HTML comment stripping: fenced blocks (backtick and tilde), multiline comments preserved inside fences
+** Decisions
+** Session log
+
 * TODO Document =.env= variables in =config --help=
 Add a single line to =deploy --help= and =init --help= pointing to =skill-shed config= for
 the full variable reference; make =config --help= the canonical list of all =.env= variables
@@ -769,6 +787,17 @@ into one of two cases, distinguishable via the sidecar:
   harder to reason about.
 - Ignore unowned files: silently accumulates cruft.
 ** Session log
+*** [2026-04-03] (session 7)
+- Completed: implemented `build_manifest_from_git_staged` (`src/manifest.ts`); added
+  `test/build-manifest-from-git-staged.test.ts` (15 tests mirroring workdir test structure,
+  with comments explaining absent counterparts); both changes await human review.  Added
+  README gap-analysis task to `JOURNAL.org`.
+- In progress: NONE
+- Next: review step 9
+- Blockers: NONE
+- Decisions: use `git ls-files -s -z` + object hash + `git cat-file blob <hash>` for index
+  reads (avoids path-relativization; works commit-less); byte-order sort not `localeCompare`
+  (matches rest of codebase)
 *** [2026-04-03] (session 6)
 - Completed: implemented `build_manifest_from_git_workdir` (step 8 in Steps); refactored code
   (split monolithic test file into per-section modules); changed default target directory to
