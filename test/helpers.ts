@@ -28,7 +28,7 @@ export async function run_init(skill_dir: string, deploy_dir?: string, flags: st
 }
 
 export async function setup_git(skill_dir: string): Promise<void> {
-	await exec_file('git', ['init'], {cwd: skill_dir})
+	await exec_file('git', ['init', '--initial-branch', 'master'], {cwd: skill_dir})
 	await exec_file('git', ['config', '--local', 'user.email', 'test@example.com'], {cwd: skill_dir})
 	await exec_file('git', ['config', '--local', 'user.name', 'Test'], {cwd: skill_dir})
 	await writeFile(join(skill_dir, '.git', 'info', 'exclude'), '.env\n')

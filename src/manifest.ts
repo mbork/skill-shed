@@ -158,8 +158,52 @@ export async function build_manifest_from_git_workdir(skill_dir: string): Promis
 }
 
 // * build_manifest_from_git_staged
-export async function build_manifest_from_git_staged(_skill_dir: string): Promise<Manifest> {
-	throw new Error('not implemented yet')
+export async function build_manifest_from_git_staged(skill_dir: string): Promise<Manifest> {
+	// All files currently in the index (committed base + staged changes)
+	const ls_result = await execFile('git', ['ls-files', '--stage', '-z'], {cwd: skill_dir})
+	const raw_entries = ls_result.stdout.split('\0').filter(Boolean)
+	const entries = raw_entries.map((entry) => {
+		const match = entry.match(/^\S+ (\S+) (\d+)\t(.+)$/s)
+		if (!match) {
+			throw new Error(`unexpected git ls-files output: ${entry}`)
+		}
+		const [, hash, stage, source_name] = match
+		return {hash, stage, source_name}
+	})
+	if (entries.some(e => e.stage !== '0')) {
+		throw new Error(`conflicts in index in ${skill_dir}: resolve conflicts before deploying`)
+	}
+	// Abort if nothing staged relative to HEAD; for commit-less repos, abort if index is empty
+	let has_head
+	try {
+		await execFile('git', ['rev-parse', 'HEAD'], {cwd: skill_dir})
+		has_head = true
+	} catch {
+		has_head = false
+	}
+	if (has_head) {
+		const diff_result = await execFile(
+			'git', ['diff-index', '--cached', '-z', 'HEAD', '--', '.'], {cwd: skill_dir},
+		)
+		if (!diff_result.stdout.trim()) {
+			throw new Error(`nothing staged in ${skill_dir}`)
+		}
+	} else if (entries.length === 0) {
+		throw new Error(`nothing staged in ${skill_dir}`)
+	}
+	const sorted_entries = entries.toSorted(
+		(a, b) => (a.source_name < b.source_name ? -1 : a.source_name > b.source_name ? 1 : 0),
+	)
+	const manifest: Manifest = await Promise.all(sorted_entries.map(async ({source_name, hash}) => {
+		// `any` needed: no `execFile` overload covers `encoding: 'buffer'`
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const cat_result = await (execFile as any)(
+			'git', ['cat-file', 'blob', hash], {cwd: skill_dir, encoding: 'buffer'},
+		)
+		const buffer = cat_result.stdout as Buffer
+		return make_manifest_entry(source_name, buffer)
+	}))
+	return manifest
 }
 
 // * build_manifest_from_git_ref

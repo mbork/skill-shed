@@ -5,6 +5,18 @@ A set of tools (in the form of a Node.js CLI script) for managing
 agent skills: format conversion, comment stripping, linting,
 deployment.  Currently in WiP/PoC stage.
 
+* TODO Test and document symlink behavior across all source modes
+Investigate how symlinks in the skill directory are handled by each
+=build_manifest_from_*= function.  Git stages symlinks as blobs containing
+the target path (mode =120000=).  The current code does not special-case them;
+the blob content (a path string) is passed through =make_manifest_entry= and
+deployed as a regular file.  This may or may not be the desired behavior.
+
+** Steps [/]
+- [ ] Write tests for symlinks in =--clean=, =--workdir=, and =--staged= modes
+- [ ] Decide whether to deploy symlink targets as regular files, preserve symlinks, or reject them
+- [ ] Document the decision
+
 * TODO Expand =README.org= to cover all implemented features
 ** Steps [/]
 - [ ] Document =MANIFEST_COMMAND= in =.skill.env=: custom shell command to list skill files (one per line, relative paths); include GNU/BSD find examples; explain use for non-git dirs
@@ -422,7 +434,7 @@ Support deploying skills that consist of more than one file.
 - [[*Skill deployment]]
 - [[*Skill comment stripping]]
 
-** Steps [9/13]
+** Steps [10/13]
 - [X] Implement ~build_manifest_from_dir~: ~readdir~ + dotfile filter, returns ~Map<string, Buffer|string>~
 - [X] Implement `*.source.md` → `*.md` comment stripping for all files in the manifest
 - [X] Implement sidecar read/write and per-file overwrite check (absent/owned/unowned cases)
@@ -431,12 +443,26 @@ Support deploying skills that consist of more than one file.
 - [X] Implement two-tier dispatch + six ~build_manifest_from_*~ functions (stubs for git modes); wire --clean/--workdir/--staged/--ref flags into deploy
 - [X] Implement ~build_manifest_from_git_clean~: git ls-files + clean check (untracked = dirty)
 - [X] Implement ~build_manifest_from_git_workdir~: git ls-files (tracked + untracked non-ignored)
-- [ ] Implement ~build_manifest_from_git_staged~: git index; abort if nothing staged
+- [X] Implement ~build_manifest_from_git_staged~: git index; abort if nothing staged
 - [ ] Implement ~build_manifest_from_git_ref~: git archive/show at given ref
 - [ ] Check config consistency (MANIFEST_COMMAND not on $PATH)
 - [ ] Document MANIFEST_COMMAND in README: dotfile deployment, non-git dirs, custom listing
 - [X] Fix =manifest= initialization in =deploy=: use =let manifest: Manifest = []=, add final =else= guard on inner source-kind dispatch (=process.exit(1)=), remove =!= assertions
 ** Decisions
+*** [2026-04-10] – Use stage > 0 entries to detect index conflicts; abort =--staged= with generic "conflicts" message
+**** Reason
+During merge, rebase, cherry-pick, revert, and =git am=, git writes stage-1/2/3 entries to the
+index for conflicted files instead of a single stage-0 entry.  Checking for any stage > 0 entry
+(from the =git ls-files --stage= output already being read) detects all conflict-producing operations
+without enumerating =.git/= sentinel files (=MERGE_HEAD=, =rebase-merge/=, etc.).  The check is
+naturally scoped to =skill_dir= via the existing pathspec, avoiding false positives in monorepos
+where a conflict exists in an unrelated subtree.  Error message says "conflicts" (not "merge conflicts")
+since the cause may be any git operation.
+**** Alternatives considered
+- Detect in-progress state via =.git/MERGE_HEAD=, =rebase-merge/= etc.: requires maintaining a
+  complete enumeration of sentinel paths; is repo-wide (false positives in monorepos); misses future
+  git operations that produce conflicts.
+
 *** [2026-04-02] – =--clean= cleanliness check scoped to =skill_dir= subtree, not the whole repo
 **** Reason
 =git status --porcelain -- .= (run with =cwd: skill_dir=) reports only staged, unstaged, and
