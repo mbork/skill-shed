@@ -445,6 +445,21 @@ Support deploying skills that consist of more than one file.
 - [X] Implement ~build_manifest_from_git_workdir~: git ls-files (tracked + untracked non-ignored)
 - [X] Implement ~build_manifest_from_git_staged~: git index; abort if nothing staged
 - [ ] Implement ~build_manifest_from_git_ref~: git archive/show at given ref
+  - Planned test cases:
+    - ~HEAD~ as ref returns committed files (basic positive case)
+    - branch name as ref
+    - tag name as ref
+    - abbreviated commit SHA as ref
+    - invalid/nonexistent ref throws with clear error
+    - empty repo (no commits) throws
+    - scoped to ~skill_dir~ in a larger repo (only ~skill_dir~ files returned)
+    - ref points to a historical state: old file content deployed, not current HEAD
+    - ~.source.md~ comment stripping
+    - binary file round-trip
+    - files in subdirectories
+    - entries sorted by ~source_name~
+    - special characters in filenames (space, Unicode, newline)
+    - no conflict detection needed (ref mode ignores index/workdir state entirely)
 - [ ] Check config consistency (MANIFEST_COMMAND not on $PATH)
 - [ ] Document MANIFEST_COMMAND in README: dotfile deployment, non-git dirs, custom listing
 - [X] Fix =manifest= initialization in =deploy=: use =let manifest: Manifest = []=, add final =else= guard on inner source-kind dispatch (=process.exit(1)=), remove =!= assertions
@@ -813,6 +828,16 @@ into one of two cases, distinguishable via the sidecar:
   harder to reason about.
 - Ignore unowned files: silently accumulates cruft.
 ** Session log
+*** [2026-04-10] (session 8)
+- Completed: `build_manifest_from_git_staged` fully implemented and reviewed; 18 tests in
+  `test/build-manifest-from-git-staged.test.ts` (conflict detection, binary round-trip, newlines
+  in filenames via `/s` flag, scoping fix for `diff-index`); conflict test added to
+  `test/build-manifest-from-git-clean.test.ts`; `setup_git` updated with `--initial-branch master`.
+- In progress: `build_manifest_from_git_ref` (test cases listed in Steps; not yet implemented)
+- Next: implement `build_manifest_from_git_ref` — test cases already listed in journal Steps
+- Blockers: NONE
+- Decisions: stage > 0 index entries detect conflicts (all git operations); `/s` regex flag for
+  newlines in filenames (already logged above)
 *** [2026-04-03] (session 7)
 - Completed: implemented `build_manifest_from_git_staged` (`src/manifest.ts`); added
   `test/build-manifest-from-git-staged.test.ts` (15 tests mirroring workdir test structure,
