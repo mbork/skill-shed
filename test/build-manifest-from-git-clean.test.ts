@@ -195,3 +195,27 @@ test('build_manifest_from_git_clean: handles files in subdirectories', async () 
 	assert.strictEqual(manifest[1].target_name, 'examples/demo.md')
 	assert.strictEqual(manifest[1].target_content, 'demo\n')
 })
+
+// `git status --porcelain` reports conflicted files (UU, AA, etc.), so the existing
+// "uncommitted changes" check incidentally catches conflicts too.
+test('build_manifest_from_git_clean: throws when index has conflicts (rebase)', async () => {
+	const dir = await make_tmp_dir()
+	await setup_git(dir)
+	await writeFile(join(dir, 'SKILL.md'), 'original')
+	await git_commit(dir)
+	await exec_file('git', ['checkout', '-b', 'feature'], {cwd: dir})
+	await writeFile(join(dir, 'SKILL.md'), 'feature version')
+	await git_commit(dir)
+	await exec_file('git', ['checkout', 'master'], {cwd: dir})
+	await writeFile(join(dir, 'SKILL.md'), 'master version')
+	await git_commit(dir)
+	await exec_file('git', ['checkout', 'feature'], {cwd: dir})
+	// git exits non-zero when the rebase produces conflicts
+	await assert.rejects(
+		() => exec_file('git', ['rebase', 'master'], {cwd: dir}),
+	)
+
+	await assert.rejects(
+		() => build_manifest_from_git_clean(dir),
+	)
+})
