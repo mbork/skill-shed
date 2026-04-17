@@ -71,7 +71,7 @@ deployed as a regular file.  This may or may not be the desired behavior.
 - [ ] Document the decision
 
 * TODO Expand =README.org= to cover all implemented features
-** Steps [11/12]
+** Steps [12/12]
 - [X] Document =MANIFEST_COMMAND= in =.skill.env=: custom shell command to list skill files (one per line, relative paths); include GNU/BSD find examples; explain use for non-git dirs
 - [X] Document sidecar file (=.skill-shed-manifest.json= in target dir): SHA-256 hashes of deployed files, drives overwrite/stale detection
 - [X] Document sentinel file (=.skill-shed-deploy-in-progress= in target dir): written during deploy, detects interruptions; explain how =--force= clears it
@@ -86,6 +86,12 @@ deployed as a regular file.  This may or may not be the desired behavior.
 - [X] Clarify HTML comment stripping: fenced blocks (backtick and tilde), multiline comments preserved inside fences
 ** Decisions
 ** Session log
+*** [2026-04-17]
+- Completed: reviewed =README.org= against all steps; marked 12 done and remove one; reviewed and committed user's =README.org= changes (1 commit)
+- In progress: NONE
+- Next: pick up "Preserve line numbers while comment stripping"
+- Blockers: NONE
+- Decisions: NONE
 
 * TODO Document =.env= variables in =config --help=
 Add a single line to =deploy --help= and =init --help= pointing to =skill-shed config= for
@@ -366,6 +372,29 @@ one-line summary per command makes the tool self-documenting at the terminal.
 - Next: mark feature DONE; consider starting `config` subcommand or `Multi-file skill support` step 3
 - Blockers: NONE
 - Decisions: `help_and_exit` extracted to deduplicate help-dispatch logic; no-args now exits 0
+
+* TODO Abort when git mode flag conflicts with MANIFEST_COMMAND
+If =MANIFEST_COMMAND= is set in =.env= and the user also passes =--clean=, =--workdir=,
+=--staged=, or =--ref=, deploy currently silently ignores the flag and runs the command.
+Abort with a clear error instead.
+
+** Steps [/]
+- [ ] Detect conflict: =MANIFEST_COMMAND= set + any git mode flag passed → abort with error
+- [ ] Add tests for the abort (one per flag: =--clean=, =--workdir=, =--staged=, =--ref=)
+
+** Decisions
+** Session log
+
+* TODO Test unowned stale file abort in deploy
+Add the missing test for the case where a file exists in the target dir but is not listed
+in the sidecar — deploy should abort unless =--force= is passed.
+
+** Steps [/]
+- [ ] Add test: deploy aborts when target contains a file not in sidecar (unowned stale)
+- [ ] Add test: =--force= deploys successfully despite unowned stale file
+
+** Decisions
+** Session log
 
 * BLOCKED Skill linting
 Lint skill files for common errors before deployment.
