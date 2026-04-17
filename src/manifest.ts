@@ -209,10 +209,54 @@ export async function build_manifest_from_git_staged(skill_dir: string): Promise
 
 // * build_manifest_from_git_ref
 export async function build_manifest_from_git_ref(
-	_skill_dir: string,
-	_ref: string,
+	skill_dir: string,
+	ref: string,
 ): Promise<Manifest> {
-	throw new Error('not implemented yet')
+	let git_root: string
+	try {
+		git_root = (
+			await execFile('git', ['rev-parse', '--show-toplevel'], {cwd: skill_dir})
+		).stdout.trim()
+	} catch {
+		throw new Error(`${skill_dir} is not inside a git repository`)
+	}
+	// Pathspec relative to repo root; empty string when skill_dir is the repo root
+	const skill_prefix = relative(git_root, skill_dir)
+	const ls_args = ['ls-tree', '-r', '-z', ref]
+	if (skill_prefix) {
+		ls_args.push('--', skill_prefix)
+	}
+	let ls_result
+	try {
+		// Run from git_root so the pathspec is unambiguously repo-root-relative
+		ls_result = await execFile('git', ls_args, {cwd: git_root})
+	} catch (e) {
+		throw new Error(`Cannot resolve ref '${ref}' in ${skill_dir}: ${(e as Error).message}`)
+	}
+	const raw_entries = ls_result.stdout.split('\0').filter(Boolean)
+	const entries = raw_entries.map((entry) => {
+		const match = entry.match(/^\S+ \S+ (\S+)\t(.+)$/s)
+		if (!match) {
+			throw new Error(`unexpected git ls-tree output: ${entry}`)
+		}
+		const [, hash, full_name] = match
+		// Strip the skill_prefix/ prefix to get source_name relative to skill_dir
+		const source_name = skill_prefix ? full_name.slice(skill_prefix.length + 1) : full_name
+		return {hash, source_name}
+	})
+	const sorted_entries = entries.toSorted(
+		(a, b) => (a.source_name < b.source_name ? -1 : a.source_name > b.source_name ? 1 : 0),
+	)
+	const manifest: Manifest = await Promise.all(sorted_entries.map(async ({source_name, hash}) => {
+		// `any` needed: no `execFile` overload covers `encoding: 'buffer'`
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const cat_result = await (execFile as any)(
+			'git', ['cat-file', 'blob', hash], {cwd: git_root, encoding: 'buffer'},
+		)
+		const buffer = cat_result.stdout as Buffer
+		return make_manifest_entry(source_name, buffer)
+	}))
+	return manifest
 }
 
 // * build_manifest_from_dir
