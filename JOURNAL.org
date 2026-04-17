@@ -5,6 +5,59 @@ A set of tools (in the form of a Node.js CLI script) for managing
 agent skills: format conversion, comment stripping, linting,
 deployment.  Currently in WiP/PoC stage.
 
+* DONE Friendly `parseArgs` error reporting and test helper cleanup
+Fix raw stack traces on bad CLI args; clean up test helpers; remove noisy ESLint rules.
+
+** Decisions
+*** [2026-04-17] – Catch `ERR_PARSE_ARGS_*` specifically; re-throw everything else
+**** Reason
+Node's `parseArgs` throws a `TypeError` with a `code` field starting with `ERR_PARSE_ARGS_`
+for bad arg combinations (e.g. `--ref --force`). Without a handler this propagates as an
+uncaught exception, dumping a full stack trace and a `Node.js vX.Y.Z` footer — making a user
+error look like a bug. Catching only `ERR_PARSE_ARGS_*` codes (re-throwing others) prints
+one clean `Error:` line and exits 1, consistent with the existing `console.error` +
+`process.exit(1)` pattern elsewhere in `parse_args()`.
+**** Alternatives considered
+- Catch all errors from `parseArgs`: would swallow genuine bugs.
+
+*** [2026-04-17] – Remove `complexity`, `max-statements`, `max-params` ESLint rules
+**** Reason
+All three rules fired on every large function in the codebase — parsers, workflow
+orchestrators, CLI dispatch — without catching real problems.  Warnings that fire constantly
+train developers to ignore lint output.  Bumping thresholds to one above the current
+worst offender carries no semantic meaning and will be violated again as code grows.  Inline
+`eslint-disable` per function scatters suppression noise through source.  Removal is the right
+call for rules that don't fit the codebase.
+**** Alternatives considered
+- Bump thresholds: arbitrary numbers, will be violated again.
+- Inline `eslint-disable` per function: noise in source, doesn't fix the root cause.
+
+*** [2026-04-17] – `run_script(...args)` as the single public generic test helper; private `exec_script(args, options)` for internal use
+**** Reason
+`run_help` and `run_cli` were identical — one redundant name eliminated.  The shared
+try/catch pattern across all four helpers extracted into private `exec_script(args, options?)`.
+Public `run_script` uses rest params so test call sites read naturally
+(`run_script('deploy', '--bogus')`).  `run_init` and `run_deploy` call `exec_script` directly
+to pass custom `env`/`cwd` without exposing those options on the public API.
+Simplified catch blocks: removed defensive `?? ''` fallbacks redundant given `exec_file`'s
+known error shape.  `run_deploy` now calls `git_commit` instead of duplicating the two git
+commands inline.
+**** Alternatives considered
+- Array call style for `run_script`: consistent with `exec_script` signature but less readable
+  at test call sites.
+
+** Session log
+*** [2026-04-17] (session 10)
+- Completed: `src/skill-shed.ts` — `parseArgs` wrapped in try/catch; `ERR_PARSE_ARGS_*` errors
+  print a clean `Error:` line and exit 1; `test/parse-args-errors.test.ts` with 2 tests.
+  `test/helpers.ts` — private `exec_script`; public `run_script(...args)` replaces `run_help`
+  and `run_cli`; simplified catch blocks; `run_deploy` uses `git_commit`.
+  `eslint.config.mts` — removed `complexity`, `max-statements`, `max-params`.  4 commits.
+- In progress: NONE
+- Next: N/A — feature complete; resume Multi-file skill support step 11 or 12 next session
+- Blockers: NONE
+- Decisions: all logged above
+
 * TODO Test and document symlink behavior across all source modes
 Investigate how symlinks in the skill directory are handled by each
 =build_manifest_from_*= function.  Git stages symlinks as blobs containing

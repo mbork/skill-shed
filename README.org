@@ -139,7 +139,7 @@ much sense when initializing existing skills.
 
 ** Deploy a skill
 #+begin_src shell
-  skill-shed deploy [ <skill-directory> ]
+  skill-shed deploy [ <skill-directory> ] [ --clean | --workdir | --staged | --ref <ref> ]
 #+end_src
 Copy the skill's file(s) from the ~<skill-directory>~ (the current
 directory by default) to ~TARGET_DIRECTORY~, stripping comments (and
