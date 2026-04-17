@@ -71,20 +71,19 @@ deployed as a regular file.  This may or may not be the desired behavior.
 - [ ] Document the decision
 
 * TODO Expand =README.org= to cover all implemented features
-** Steps [/]
-- [ ] Document =MANIFEST_COMMAND= in =.skill.env=: custom shell command to list skill files (one per line, relative paths); include GNU/BSD find examples; explain use for non-git dirs
-- [ ] Document sidecar file (=.skill-shed-manifest.json= in target dir): SHA-256 hashes of deployed files, drives overwrite/stale detection
-- [ ] Document sentinel file (=.skill-shed-deploy-in-progress= in target dir): written during deploy, detects interruptions; explain how =--force= clears it
-- [ ] Document overwrite and stale file detection: conditions that abort deploy, what =--force= does for each case
-- [ ] Document manifest validation rules: skill must have a file targeting =SKILL.md=; no two sources may resolve to the same target name
-- [ ] Document =~= expansion in =TARGET_DIRECTORY= and =DEFAULT_TARGET_DIRECTORY=
-- [ ] Document that relative =TARGET_DIRECTORY= is resolved against =skill_dir=, not =cwd=
-- [ ] Document =.source.md= → =.md= transformation as a general pattern (not just =SKILL.source.md=)
-- [ ] Clarify =--force= has two distinct purposes: overwrite modified files + resume interrupted deploy
-- [ ] Document git error states: =no-git= (git not installed) vs =no-repo= (not in a git repo), and their respective error messages
-- [ ] Document =SKILL_SHED_CONFIG= env var for overriding the global config file path
-- [ ] Document =help= subcommand and =-h= alias for =--help=
-- [ ] Clarify HTML comment stripping: fenced blocks (backtick and tilde), multiline comments preserved inside fences
+** Steps [11/12]
+- [X] Document =MANIFEST_COMMAND= in =.skill.env=: custom shell command to list skill files (one per line, relative paths); include GNU/BSD find examples; explain use for non-git dirs
+- [X] Document sidecar file (=.skill-shed-manifest.json= in target dir): SHA-256 hashes of deployed files, drives overwrite/stale detection
+- [X] Document sentinel file (=.skill-shed-deploy-in-progress= in target dir): written during deploy, detects interruptions; explain how =--force= clears it
+- [X] Document overwrite and stale file detection: conditions that abort deploy, what =--force= does for each case
+- [X] Document manifest validation rules: skill must have a file targeting =SKILL.md=; no two sources may resolve to the same target name
+- [X] Document =~= expansion in =TARGET_DIRECTORY= and =DEFAULT_TARGET_DIRECTORY=
+- [X] Document that relative =TARGET_DIRECTORY= is resolved against =skill_dir=, not =cwd=
+- [X] Document =.source.md= → =.md= transformation as a general pattern (not just =SKILL.source.md=)
+- [X] Clarify =--force= has two distinct purposes: overwrite modified files + resume interrupted deploy
+- [X] Document =SKILL_SHED_CONFIG= env var for overriding the global config file path
+- [X] Document =help= subcommand
+- [X] Clarify HTML comment stripping: fenced blocks (backtick and tilde), multiline comments preserved inside fences
 ** Decisions
 ** Session log
 
