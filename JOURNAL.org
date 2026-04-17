@@ -434,7 +434,7 @@ Support deploying skills that consist of more than one file.
 - [[*Skill deployment]]
 - [[*Skill comment stripping]]
 
-** Steps [10/13]
+** Steps [11/13]
 - [X] Implement ~build_manifest_from_dir~: ~readdir~ + dotfile filter, returns ~Map<string, Buffer|string>~
 - [X] Implement `*.source.md` → `*.md` comment stripping for all files in the manifest
 - [X] Implement sidecar read/write and per-file overwrite check (absent/owned/unowned cases)
@@ -444,7 +444,7 @@ Support deploying skills that consist of more than one file.
 - [X] Implement ~build_manifest_from_git_clean~: git ls-files + clean check (untracked = dirty)
 - [X] Implement ~build_manifest_from_git_workdir~: git ls-files (tracked + untracked non-ignored)
 - [X] Implement ~build_manifest_from_git_staged~: git index; abort if nothing staged
-- [ ] Implement ~build_manifest_from_git_ref~: git archive/show at given ref
+- [X] Implement ~build_manifest_from_git_ref~: git archive/show at given ref
   - Planned test cases:
     - ~HEAD~ as ref returns committed files (basic positive case)
     - branch name as ref
@@ -464,6 +464,42 @@ Support deploying skills that consist of more than one file.
 - [ ] Document MANIFEST_COMMAND in README: dotfile deployment, non-git dirs, custom listing
 - [X] Fix =manifest= initialization in =deploy=: use =let manifest: Manifest = []=, add final =else= guard on inner source-kind dispatch (=process.exit(1)=), remove =!= assertions
 ** Decisions
+*** [2026-04-17] – Run =git ls-tree= from =git_root= (not =skill_dir=) so pathspec is unambiguously repo-root-relative
+**** Reason
+=git ls-tree= pathspecs are interpreted against the tree object, not cwd; running it from
+=skill_dir= with a pathspec of =my-skill= would be ambiguous.  Running from =git_root= with the
+pathspec as =relative(git_root, skill_dir)= removes the ambiguity entirely.  Output paths
+(repo-root-relative) are then stripped of the skill prefix to yield skill-dir-relative
+=source_name=.  =git cat-file blob <hash>= is hash-based and needs no particular cwd, but also
+runs in =git_root= for uniformity across the function.
+**** Alternatives considered
+- Run =ls-tree= from =skill_dir= without a pathspec, then filter by prefix client-side: wasteful
+  in large monorepos (reads entire tree), and the filtering logic duplicates what git already
+  does via pathspec.
+
+*** [2026-04-17] – Empty subtree at valid ref returns =[]=; =validate_manifest= surfaces the error
+**** Reason
+When a ref resolves but =skill_dir= has no files at that ref (e.g. the directory didn't exist
+yet), =git ls-tree= exits 0 with empty output.  The function returns =[]= silently; the
+existing =validate_manifest= then reports "No entry targets SKILL.md" with an actionable
+message.  Keeps =build_manifest_from_git_ref= honest about what git said and avoids duplicating
+validation logic.
+**** Alternatives considered
+- Throw a dedicated "no files at ref" error: duplicates =validate_manifest='s job; two errors
+  for the same user-facing problem.
+
+*** [2026-04-17] – =tsconfig.json= =lib= must match a lib file shipped by the installed TypeScript
+**** Reason
+TypeScript 5.9.3 ships lib files up to =ES2024=.  Using =lib: ["ES2025"]= was silently accepted
+by =tsgo= (the Go preview checker used by =npm run typecheck=) but rejected by the classic =tsc=
+that powers the editor's language server — which fell back to a default that excluded ES2023
+array methods, breaking =toSorted= and cascading into implicit-=any= errors throughout the
+file.  Switched to =lib: ["ES2024"]= so both checkers agree.  =RegExp.escape= (Stage 3 proposal,
+not yet in any TS lib) is suppressed with a single =@ts-expect-error=.
+**** Alternatives considered
+- Replace =toSorted= with =[...arr].sort=: works, but loses the cleaner idiom and doesn't fix
+  the root cause (invalid =lib= value still accepted silently by =tsgo=).
+
 *** [2026-04-10] – Use stage > 0 entries to detect index conflicts; abort =--staged= with generic "conflicts" message
 **** Reason
 During merge, rebase, cherry-pick, revert, and =git am=, git writes stage-1/2/3 entries to the
@@ -828,6 +864,24 @@ into one of two cases, distinguishable via the sidecar:
   harder to reason about.
 - Ignore unowned files: silently accumulates cruft.
 ** Session log
+*** [2026-04-17] (session 9)
+- Completed: `build_manifest_from_git_ref` fully implemented in `src/manifest.ts` (runs
+  `git ls-tree -r -z` from `git_root` with repo-root-relative pathspec; strips skill prefix
+  from returned names; reads blobs via `git cat-file`).  18 tests in
+  `test/build-manifest-from-git-ref.test.ts` covering HEAD/branch/tag/abbrev-SHA refs, invalid
+  ref and empty-repo errors, one- and two-level-deep nested skills, nested skill with own
+  subdirectory, historical state, empty subtree, `.source.md` stripping, binary round-trip,
+  subdirectories, sort order, spaces/Unicode/newlines in filenames, indifference to workdir /
+  index / conflict state.  Fixed editor typecheck divergence: switched `lib` from `ES2025`
+  (not shipped by TS 5.9.3) to `ES2024`; added `@ts-expect-error` for `RegExp.escape`.
+  Two commits: typecheck fix; `build_manifest_from_git_ref` + tests.
+- In progress: NONE
+- Next: implement step 11 — check config consistency (MANIFEST_COMMAND not on $PATH), or
+  step 12 — document MANIFEST_COMMAND in README
+- Blockers: NONE
+- Decisions: ls-tree from `git_root` for unambiguous pathspec; empty subtree returns `[]` and
+  lets `validate_manifest` surface the error; tsconfig `lib` must match installed TS version
+  (tsgo silently accepts invalid values, classic tsc rejects them)
 *** [2026-04-10] (session 8)
 - Completed: `build_manifest_from_git_staged` fully implemented and reviewed; 18 tests in
   `test/build-manifest-from-git-staged.test.ts` (conflict detection, binary round-trip, newlines
