@@ -6,7 +6,7 @@
 // * Imports
 
 import {execFile as execFile_cb} from 'node:child_process'
-import {readdir, readFile} from 'node:fs/promises'
+import {readFile} from 'node:fs/promises'
 import {normalize, relative, resolve} from 'node:path'
 import {promisify} from 'node:util'
 import {strip_html_comments} from './strip-html-comments.ts'
@@ -272,19 +272,5 @@ export async function build_manifest_from_git_ref(
 		const buffer = cat_result.stdout as Buffer
 		return make_manifest_entry(source_name, buffer)
 	}))
-	return manifest
-}
-
-// * build_manifest_from_dir
-export async function build_manifest_from_dir(skill_dir: string): Promise<Manifest> {
-	const names = (await readdir(skill_dir)).sort()
-	const manifest: Manifest = []
-	for (const source_name of names) {
-		if (source_name.startsWith('.')) {
-			continue
-		}
-		const buffer = await readFile(resolve(skill_dir, source_name))
-		manifest.push(make_manifest_entry(source_name, buffer))
-	}
 	return manifest
 }
