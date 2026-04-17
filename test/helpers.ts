@@ -13,18 +13,29 @@ export const script = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'sr
 
 export interface Run_result {stdout: string, stderr: string, code: number}
 
-export interface Run_init_options {env?: NodeJS.ProcessEnv}
+export async function run_script(args: string[], options: {env?: NodeJS.ProcessEnv, cwd?: string} = {}): Promise<Run_result> {
+	try {
+		const result = await exec_file('node', [script, ...args], options)
+		return {stdout: result.stdout, stderr: result.stderr, code: 0}
+	} catch (e) {
+		const err = e as {stdout: string, stderr: string, code: number}
+		return {stdout: err.stdout, stderr: err.stderr, code: err.code}
+	}
+}
 
-export async function run_init(skill_dir: string, deploy_dir?: string, flags: string[] = [], options: Run_init_options = {}): Promise<Run_result> {
+export async function run_init(skill_dir: string, deploy_dir?: string, flags: string[] = [], options: {env?: NodeJS.ProcessEnv} = {}): Promise<Run_result> {
 	const extra_args = deploy_dir ? [deploy_dir] : []
 	const env = options.env ?? process.env
-	try {
-		const result = await exec_file('node', [script, 'init', skill_dir, ...extra_args, ...flags], {env})
-		return {stdout: result.stdout, stderr: result.stderr, code: 0}
-	} catch (e: unknown) {
-		const err = e as {stdout?: string, stderr?: string, code?: number}
-		return {stdout: err.stdout ?? '', stderr: err.stderr ?? '', code: err.code ?? 1}
-	}
+	return run_script(['init', skill_dir, ...extra_args, ...flags], {env})
+}
+
+export async function run_deploy(skill_dir: string, options: {cwd?: string, flags?: string[]} = {}): Promise<Run_result> {
+	const env = {...process.env}
+	delete env.TARGET_DIRECTORY
+	const flags = options.flags ?? []
+	await setup_git(skill_dir)
+	await git_commit(skill_dir)
+	return run_script(['deploy', skill_dir, ...flags], {env, cwd: options.cwd})
 }
 
 export async function setup_git(skill_dir: string): Promise<void> {
@@ -37,42 +48,6 @@ export async function setup_git(skill_dir: string): Promise<void> {
 export async function git_commit(dir: string): Promise<void> {
 	await exec_file('git', ['add', '-A'], {cwd: dir})
 	await exec_file('git', ['commit', '--allow-empty', '-m', 'test'], {cwd: dir})
-}
-
-export async function run_deploy(skill_dir: string, options: {cwd?: string, flags?: string[]} = {}): Promise<Run_result> {
-	const env = {...process.env}
-	delete env.TARGET_DIRECTORY
-	const flags = options.flags ?? []
-	await setup_git(skill_dir)
-	await exec_file('git', ['add', '-A'], {cwd: skill_dir})
-	await exec_file('git', ['commit', '--allow-empty', '-m', 'test'], {cwd: skill_dir})
-	try {
-		const result = await exec_file('node', [script, 'deploy', skill_dir, ...flags], {env, cwd: options.cwd})
-		return {stdout: result.stdout, stderr: result.stderr, code: 0}
-	} catch (e: unknown) {
-		const err = e as {stdout?: string, stderr?: string, code?: number}
-		return {stdout: err.stdout ?? '', stderr: err.stderr ?? '', code: err.code ?? 1}
-	}
-}
-
-export async function run_help(...args: string[]): Promise<Run_result> {
-	try {
-		const result = await exec_file('node', [script, ...args])
-		return {stdout: result.stdout, stderr: result.stderr, code: 0}
-	} catch (e: unknown) {
-		const err = e as {stdout?: string, stderr?: string, code?: number}
-		return {stdout: err.stdout ?? '', stderr: err.stderr ?? '', code: err.code ?? 1}
-	}
-}
-
-export async function run_cli(...args: string[]): Promise<Run_result> {
-	try {
-		const result = await exec_file('node', [script, ...args])
-		return {stdout: result.stdout, stderr: result.stderr, code: 0}
-	} catch (e) {
-		const err = e as {stdout: string, stderr: string, code: number}
-		return {stdout: err.stdout, stderr: err.stderr, code: err.code}
-	}
 }
 
 export async function make_tmp_dir(): Promise<string> {
