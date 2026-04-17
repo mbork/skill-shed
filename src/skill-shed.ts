@@ -24,19 +24,31 @@ function parse_args(raw_args: string[]): {
 	is_force: boolean
 	command_line_source: ManifestSource
 } {
-	const {positionals, values} = parseArgs({
-		args: raw_args,
-		allowPositionals: true,
-		options: {
-			'comments': {type: 'boolean'},
-			'no-comments': {type: 'boolean'},
-			'force': {type: 'boolean', short: 'f'},
-			'clean': {type: 'boolean'},
-			'workdir': {type: 'boolean'},
-			'staged': {type: 'boolean'},
-			'ref': {type: 'string'},
-		},
-	})
+	let parsed
+	try {
+		parsed = parseArgs({
+			args: raw_args,
+			allowPositionals: true,
+			options: {
+				'comments': {type: 'boolean'},
+				'no-comments': {type: 'boolean'},
+				'force': {type: 'boolean', short: 'f'},
+				'clean': {type: 'boolean'},
+				'workdir': {type: 'boolean'},
+				'staged': {type: 'boolean'},
+				'ref': {type: 'string'},
+			},
+		})
+	} catch (err) {
+		if (err instanceof Error && 'code' in err
+			&& typeof err.code === 'string'
+			&& err.code.startsWith('ERR_PARSE_ARGS_')) {
+			console.error(`Error: ${err.message}`)
+			process.exit(1)
+		}
+		throw err
+	}
+	const {positionals, values} = parsed
 
 	const [command, second_arg, third_arg] = positionals
 

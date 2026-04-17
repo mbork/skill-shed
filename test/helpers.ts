@@ -65,6 +65,16 @@ export async function run_help(...args: string[]): Promise<Run_result> {
 	}
 }
 
+export async function run_cli(...args: string[]): Promise<Run_result> {
+	try {
+		const result = await exec_file('node', [script, ...args])
+		return {stdout: result.stdout, stderr: result.stderr, code: 0}
+	} catch (e) {
+		const err = e as {stdout: string, stderr: string, code: number}
+		return {stdout: err.stdout, stderr: err.stderr, code: err.code}
+	}
+}
+
 export async function make_tmp_dir(): Promise<string> {
 	return mkdtemp(join(tmpdir(), 'skill-shed-test-'))
 }
