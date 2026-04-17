@@ -29,6 +29,7 @@ export type Manifest = ManifestEntry[]
 const SOURCE_SUFFIXES = ['.source.md']
 
 // Build one regex matching any known suffix at end-of-string, e.g. /(?:\.source\.md)$/
+// @ts-expect-error RegExp.escape is a Stage 3 proposal, not yet in any TypeScript lib
 const SOURCE_SUFFIX_RE = new RegExp(`(?:${SOURCE_SUFFIXES.map(s => RegExp.escape(s)).join('|')})$`)
 
 export function target_filename(source: string): string {
