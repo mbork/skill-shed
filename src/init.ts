@@ -59,8 +59,8 @@ export async function init(
 # MANIFEST_COMMAND: command to list skill files, one per line (relative paths).
 # Set this if git is not available or you want a non-git workflow.
 # Examples:
-#   GNU find (Linux):   MANIFEST_COMMAND=find . -type f -not -path '*/.*'
-#   BSD find (macOS):   MANIFEST_COMMAND=find . -type f ! -path '*/.*'
+#   GNU find (Linux):   MANIFEST_COMMAND=find . -type f -not -path '*/.*' -not -name '*~'
+#   BSD find (macOS):   MANIFEST_COMMAND=find . -type f ! -path '*/.*' ! -name '*~'
 #   Windows (Git Bash): use the GNU find example above
 `)
 

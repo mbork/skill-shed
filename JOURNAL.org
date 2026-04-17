@@ -476,8 +476,9 @@ errors) and reads as machine-generated — wrong for a file users edit directly.
 - Decisions: all logged above (dotenv format; `~/.skill-shed.env` name; `config` subcommand
   split into its own feature; no write path for `config`)
 
-* INPROGRESS Multi-file skill support
+* DONE Multi-file skill support
 :LOGBOOK:
+- State "DONE"       from "INPROGRESS" [2026-04-17 Fri 15:29]
 - State "INPROGRESS" from "TODO"       [2026-03-25 Wed 16:50]
 - State "TODO"       from "BLOCKED"    [2026-03-25 Wed 16:29]
 :END:
@@ -487,7 +488,7 @@ Support deploying skills that consist of more than one file.
 - [[*Skill deployment]]
 - [[*Skill comment stripping]]
 
-** Steps [12/13]
+** Steps [13/13]
 - [X] Implement ~build_manifest_from_dir~: ~readdir~ + dotfile filter, returns ~Map<string, Buffer|string>~
 - [X] Implement `*.source.md` → `*.md` comment stripping for all files in the manifest
 - [X] Implement sidecar read/write and per-file overwrite check (absent/owned/unowned cases)
@@ -514,7 +515,7 @@ Support deploying skills that consist of more than one file.
     - special characters in filenames (space, Unicode, newline)
     - no conflict detection needed (ref mode ignores index/workdir state entirely)
 - [X] Check config consistency (MANIFEST_COMMAND not on $PATH)
-- [ ] Document MANIFEST_COMMAND in README: dotfile deployment, non-git dirs, custom listing
+- [X] Document MANIFEST_COMMAND in README: dotfile deployment, non-git dirs, custom listing
 - [X] Fix =manifest= initialization in =deploy=: use =let manifest: Manifest = []=, add final =else= guard on inner source-kind dispatch (=process.exit(1)=), remove =!= assertions
 ** Decisions
 *** [2026-04-17] – Run =git ls-tree= from =git_root= (not =skill_dir=) so pathspec is unambiguously repo-root-relative
@@ -917,6 +918,19 @@ into one of two cases, distinguishable via the sidecar:
   harder to reason about.
 - Ignore unowned files: silently accumulates cruft.
 ** Session log
+*** [2026-04-17] (session 11)
+- Completed: `build_manifest_from_command` implemented (`src/manifest.ts`): runs via `/bin/sh -c`,
+  normalizes `./` prefixes, sorts, reads files from disk; 8 unit tests in
+  `test/build-manifest-from-command.test.ts`.  Removed dead `build_manifest_from_dir` and its
+  9 tests.  `README.org` and `init.ts` `.env` template updated: `/bin/sh`, one-per-line format,
+  GNU/BSD `find` examples with `*~` exclusion.  3 commits.  All 13 steps done.
+- In progress: NONE
+- Next: mark feature DONE; pick next feature
+- Blockers: NONE
+- Decisions: drop `command -v` pre-flight PATH check (power users can debug shell errors);
+  `/bin/sh` over `/bin/bash` (portability — Alpine CI); newline separation over NUL (usability
+  wins for developer-authored filenames); no helper for filesystem readers (workdir variant
+  differs, 3 lines not worth abstracting); `*~` only in find exclusion (drop `#*#` auto-save)
 *** [2026-04-17] (session 9)
 - Completed: `build_manifest_from_git_ref` fully implemented in `src/manifest.ts` (runs
   `git ls-tree -r -z` from `git_root` with repo-root-relative pathspec; strips skill prefix
