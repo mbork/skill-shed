@@ -191,8 +191,9 @@ Apart from that, every skill managed by ~skill-shed~ has its own little config â
 the skill's directory.  This file may contain the following variables:
 - ~TARGET_DIRECTORY~ :: copied by ~init~ from ~DEFAULT_TARGET_DIRECTORY~ (but can be changed anytime
   without touching the default).
-- ~MANIFEST_COMMAND~ :: (optional) command whose output is used as the skill file list (should not
-  be necessary if the skill is version-controlled with Git).
+- ~MANIFEST_COMMAND~ :: (optional) command whose output is used as the skill file list.  (Should not
+  be necessary if the skill is version-controlled with Git.)  The command given is run with
+  ~/bin/sh~ and is expected to print a list of filenames (one per line) on stdout.
 
 * Development
 - ~npm ci~ to populate ~./node_modules~

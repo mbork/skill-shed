@@ -487,7 +487,7 @@ Support deploying skills that consist of more than one file.
 - [[*Skill deployment]]
 - [[*Skill comment stripping]]
 
-** Steps [11/13]
+** Steps [12/13]
 - [X] Implement ~build_manifest_from_dir~: ~readdir~ + dotfile filter, returns ~Map<string, Buffer|string>~
 - [X] Implement `*.source.md` → `*.md` comment stripping for all files in the manifest
 - [X] Implement sidecar read/write and per-file overwrite check (absent/owned/unowned cases)
@@ -513,7 +513,7 @@ Support deploying skills that consist of more than one file.
     - entries sorted by ~source_name~
     - special characters in filenames (space, Unicode, newline)
     - no conflict detection needed (ref mode ignores index/workdir state entirely)
-- [ ] Check config consistency (MANIFEST_COMMAND not on $PATH)
+- [X] Check config consistency (MANIFEST_COMMAND not on $PATH)
 - [ ] Document MANIFEST_COMMAND in README: dotfile deployment, non-git dirs, custom listing
 - [X] Fix =manifest= initialization in =deploy=: use =let manifest: Manifest = []=, add final =else= guard on inner source-kind dispatch (=process.exit(1)=), remove =!= assertions
 ** Decisions

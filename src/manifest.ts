@@ -7,7 +7,7 @@
 
 import {execFile as execFile_cb} from 'node:child_process'
 import {readdir, readFile} from 'node:fs/promises'
-import {relative, resolve} from 'node:path'
+import {normalize, relative, resolve} from 'node:path'
 import {promisify} from 'node:util'
 import {strip_html_comments} from './strip-html-comments.ts'
 
@@ -75,10 +75,26 @@ export function validate_manifest(manifest: Manifest): void {
 
 // * build_manifest_from_command
 export async function build_manifest_from_command(
-	_skill_dir: string,
-	_command: string,
+	skill_dir: string,
+	command: string,
 ): Promise<Manifest> {
-	throw new Error('not implemented yet')
+	let result
+	try {
+		result = await execFile('/bin/sh', ['-c', command], {cwd: skill_dir})
+	} catch (e: unknown) {
+		const err = e as {stderr?: string, message: string}
+		throw new Error(`MANIFEST_COMMAND failed: ${err.stderr?.trim() || err.message}`)
+	}
+	const names = result.stdout
+		.split('\n')
+		.filter(Boolean)
+		.map(n => normalize(n))
+		.sort()
+	const manifest: Manifest = await Promise.all(names.map(async (source_name) => {
+		const buffer = await readFile(resolve(skill_dir, source_name))
+		return make_manifest_entry(source_name, buffer)
+	}))
+	return manifest
 }
 
 // * build_manifest_from_git_clean
