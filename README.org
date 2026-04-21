@@ -48,18 +48,14 @@ Node.js 24+ and Git.  (It is possible to use =skill-shed= without Git, see /Conf
 but I do not recommend it.  Git is necessary for development, since the tests run it.)
 
 * Installation
-Because of the PoC/WiP status of this project, currently the suggested way to install this is to
-clone the repo (or download a zip using GitHub's web UI), ~cd~ to it and say something along the
-lines of
 #+begin_src shell
-  npm install --global --prefix "$HOME/bin" --omit=dev
+  npm install --global @mbork_pl/skill-shed
 #+end_src
-assuming =~/bin= is in your ~$PATH~.  (If you don't have =~/bin= in ~$PATH~ and don't know how to
-add it there, you might consider ~sudo npm install --global --omit=dev~, but ~sudo npm install
---global~ is infamous for causing problems on some setups.)
 
-When ~skill-shed~ becomes more mature, I will upload it to [[https://www.npmjs.com/][NPM]], and the installation will become
-much simpler.
+Or run without installing:
+#+begin_src shell
+  npx @mbork_pl/skill-shed <arguments...>
+#+end_src
 
 * Quick start
 #+begin_src shell
@@ -225,3 +221,8 @@ resolved relative to the skill directory.
   test/deploy.test.ts~
 - ~npm run typecheck~ to check typing
 - ~npm run lint~ to Eslint-check the source code
+
+** Publishing a new release
+1. Bump =version= in =package.json=
+2. Commit and tag: ~git tag vX.Y.Z~
+3. ~npm publish --access public~ (requires =//registry.npmjs.org/:_authToken= set in =~/.npmrc=)

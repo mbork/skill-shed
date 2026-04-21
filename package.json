@@ -1,5 +1,5 @@
 {
-  "name": "skill-shed",
+  "name": "@mbork_pl/skill-shed",
   "version": "0.1.0",
   "description": "A set of tools for managing agent skills",
   "keywords": [
@@ -23,6 +23,11 @@
     "node": ">=24"
   },
   "type": "module",
+  "files": [
+    "src",
+    "assets",
+    "README.org"
+  ],
   "bin": {
     "skill-shed": "src/skill-shed.ts"
   },
