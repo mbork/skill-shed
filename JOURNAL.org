@@ -396,7 +396,10 @@ in the sidecar — deploy should abort unless =--force= is passed.
 ** Decisions
 ** Session log
 
-* BLOCKED Skill linting
+* TODO Skill linting
+:LOGBOOK:
+- State "TODO"       from "BLOCKED"    [2026-04-21 Tue 09:30]
+:END:
 Lint skill files for common errors before deployment.
 
 ** Blocked by
@@ -441,7 +444,25 @@ comment lines are removed.
 - [X] Add tests for line mapping correctness
 
 ** Decisions
+*** [2026-04-21] – Drop null `unclosed_comment_line` tests from `ucl` subsection
+**** Reason
+Every test in the main section already asserts `unclosed_comment_line: null` via `deepStrictEqual`.
+The separate null tests added no coverage; their only value was documentation, now provided by a
+comment in the subsection header.
+
 ** Session log
+*** [2026-04-21]
+- Completed: `src/strip-html-comments.ts` — `strip_html_comments` now returns `StripResult`
+  (`content`, `line_map`, `unclosed_comment_line`); `src/manifest.ts` `make_manifest_entry`
+  populates `line_map` on `.source.md` entries; `src/init.ts` updated to use `.content`.
+  `test/strip-html-comments.test.ts` overhauled: merged content+line_map sections into one using
+  `deepStrictEqual` on full result; added 12+ new test cases; formatted arrays one-per-line;
+  removed redundant null-ucl tests. Feature marked DONE. 2 commits.
+- In progress: NONE
+- Next: pick next feature — candidates: `config` subcommand, `strip` subcommand, "Abort when git
+  mode flag conflicts with MANIFEST_COMMAND", or "Test unowned stale file abort in deploy"
+- Blockers: NONE
+- Decisions: logged above
 
 * TODO Publish to npm and document installation
 Publish the package to npm so users can install it with a single
