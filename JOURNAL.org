@@ -423,18 +423,22 @@ Lint skill files for common errors before deployment.
   line numbers, not original source — acceptable as a known limitation?
 ** Session log
 
-* TODO Preserve line numbers while comment stripping
+* DONE Preserve line numbers while comment stripping
+:LOGBOOK:
+- State "DONE"       from "INPROGRESS" [2026-04-21 Tue 09:27]
+- State "INPROGRESS" from "TODO"       [2026-04-21 Tue 09:27]
+:END:
 Extend ~strip_html_comments~ to return a source-line mapping alongside the stripped
 content, so that lint messages can reference original source line numbers even after
 comment lines are removed.
 
-** Steps [0/5]
-- [ ] Define mapping type: array mapping each stripped content line index to its source line index
-- [ ] To facilitate linting, add more data to the result of stripping (line number where the
+** Steps [5/5]
+- [X] Define mapping type: array mapping each stripped content line index to its source line index
+- [X] To facilitate linting, add more data to the result of stripping (line number where the
   unclosed comment started, or null if all comments were closed)
-- [ ] Extend ~strip_html_comments~ to return stripped content together with the line mapping
-- [ ] Update callers (~deploy~, ~init~) to use the new return value (ignoring the mapping where not needed)
-- [ ] Add tests for line mapping correctness
+- [X] Extend ~strip_html_comments~ to return stripped content together with the line mapping
+- [X] Update callers (~deploy~, ~init~) to use the new return value (ignoring the mapping where not needed)
+- [X] Add tests for line mapping correctness
 
 ** Decisions
 ** Session log
