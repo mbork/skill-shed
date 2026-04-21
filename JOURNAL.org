@@ -428,7 +428,7 @@ Extend ~strip_html_comments~ to return a source-line mapping alongside the strip
 content, so that lint messages can reference original source line numbers even after
 comment lines are removed.
 
-** Steps [/]
+** Steps [0/5]
 - [ ] Define mapping type: array mapping each stripped content line index to its source line index
 - [ ] To facilitate linting, add more data to the result of stripping (line number where the
   unclosed comment started, or null if all comments were closed)

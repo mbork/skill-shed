@@ -40,10 +40,12 @@ export function target_filename(source: string): string {
 function make_manifest_entry(source_name: string, buffer: Buffer): ManifestEntry {
 	const source_content = source_name.endsWith('.md') ? buffer.toString('utf8') : buffer
 	const target_name = target_filename(source_name)
-	const target_content = source_name.endsWith('.source.md')
-		? strip_html_comments(source_content as string)
-		: source_content
-	return {source_name, target_name, source_content, target_content}
+	if (source_name.endsWith('.source.md')) {
+		const {content, line_map} = strip_html_comments(source_content as string)
+		return {source_name, target_name, source_content, target_content: content, line_map}
+	} else {
+		return {source_name, target_name, source_content, target_content: source_content}
+	}
 }
 
 // * find_target_conflicts

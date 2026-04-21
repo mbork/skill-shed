@@ -75,7 +75,9 @@ export async function init(
 			.replace('{{name}}', skill_name)
 			.replace('{{Name}}', skill_name.charAt(0).toUpperCase() + skill_name.slice(1))
 		const should_strip_comments = !(comments_mode ?? true)
-		const skill_content = should_strip_comments ? strip_html_comments(substituted) : substituted
+		const skill_content = should_strip_comments
+			? strip_html_comments(substituted).content
+			: substituted
 		await writeFile(new_skill_path, skill_content)
 	}
 
