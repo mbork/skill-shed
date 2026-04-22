@@ -9,6 +9,7 @@ import {
 	build_manifest_from_git_workdir,
 	build_manifest_from_git_staged,
 	build_manifest_from_git_ref,
+	find_target_conflicts,
 	type Manifest,
 } from './manifest.ts'
 import type {ManifestSource} from './deploy.ts'
@@ -37,10 +38,22 @@ function check_skill_md_exists(skill_dir: string, manifest: Manifest): LintMessa
 	return []
 }
 
+// * check_no_conflicts
+function check_no_conflicts(skill_dir: string, manifest: Manifest): LintMessage[] {
+	const conflicts = find_target_conflicts(manifest.map(e => e.source_name))
+	return conflicts.map(group => ({
+		file: skill_dir,
+		line: 0,
+		severity: 'error' as LintSeverity,
+		message: `conflicting source files: ${group.join(', ')}`,
+	}))
+}
+
 // * lint_manifest
 function lint_manifest(skill_dir: string, manifest: Manifest): LintMessage[] {
 	return [
 		...check_skill_md_exists(skill_dir, manifest),
+		...check_no_conflicts(skill_dir, manifest),
 	]
 }
 

@@ -29,6 +29,22 @@ test('lint: SKILL.md present — no errors', async () => {
 	assert.strictEqual(result.stdout.trim(), '')
 })
 
+// ** Conflict detection
+
+test('lint: conflicting source files is an error — one error per conflicting group', async () => {
+	const skill_dir = await make_tmp_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), '# My Skill\n')
+	await writeFile(join(skill_dir, 'SKILL.source.md'), '# My Skill\n')
+	await writeFile(join(skill_dir, 'reference.md'), '# Ref\n')
+	await writeFile(join(skill_dir, 'reference.source.md'), '# Ref\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 1)
+	assert.match(result.stdout, /error: conflicting source files: SKILL\.md, SKILL\.source\.md/)
+	assert.match(result.stdout, /error: conflicting source files: reference\.md, reference\.source\.md/)
+})
+
 test('lint: SKILL.source.md present — no errors', async () => {
 	const skill_dir = await make_tmp_dir()
 	await writeFile(join(skill_dir, 'SKILL.source.md'), '# My Skill\n')

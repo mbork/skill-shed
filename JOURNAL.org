@@ -419,9 +419,9 @@ Lint skill files for common errors before deployment.
 ** Blocked by
 - [[*Preserve line numbers while comment stripping]]
 
-** Steps [0/12]
+** Steps [2/12]
 - [X] Check that `SKILL.md` exists (error)
-- [ ] Check for conflicting source files (two files resolving to the same target name) (error)
+- [X] Check for conflicting source files (two files resolving to the same target name) (error)
 - [ ] Check for unclosed HTML comments (error); report file + line number
 - [ ] Check for unclosed fenced code blocks (error); applies to both =.source.md= and =.md= files
 - [ ] Validate frontmatter (required fields, non-empty values, known types) (error)
