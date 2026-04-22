@@ -11,7 +11,7 @@ import {
 	validate_manifest,
 	type Manifest,
 } from './manifest.ts'
-import {detect_git, expand_tilde} from './utils.ts'
+import {ensure_git_or_abort, expand_tilde} from './utils.ts'
 
 import {
 	collect_overwrite_violations,
@@ -106,20 +106,7 @@ export async function deploy(
 		if (manifest_source.kind === 'command') {
 			manifest = await build_manifest_from_command(skill_dir, manifest_source.command)
 		} else {
-			const git_status = await detect_git(skill_dir)
-			if (git_status === 'no-git') {
-				console.error(
-					'Error: git not found; install git and run `git init`,'
-					+ ' or set MANIFEST_COMMAND in .env',
-				)
-				process.exit(1)
-			}
-			if (git_status === 'no-repo') {
-				console.error(
-					'Error: not a git repository; run `git init` or set MANIFEST_COMMAND in .env',
-				)
-				process.exit(1)
-			}
+			await ensure_git_or_abort(skill_dir)
 			if (manifest_source.kind === 'workdir') {
 				manifest = await build_manifest_from_git_workdir(skill_dir)
 			} else if (manifest_source.kind === 'staged') {
