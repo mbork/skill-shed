@@ -6,6 +6,7 @@ import {parseArgs} from 'node:util'
 import {init} from './init.ts'
 import {deploy} from './deploy.ts'
 import type {ManifestSource} from './deploy.ts'
+import {lint} from './lint.ts'
 import {help_and_exit} from './help.ts'
 
 // * handle_help_flag
@@ -102,6 +103,8 @@ async function dispatch(
 		await init(skill_dir, third_arg, comments_mode)
 	} else if (command === 'deploy') {
 		await deploy(skill_dir, is_force, command_line_source)
+	} else if (command === 'lint') {
+		await lint(skill_dir, command_line_source)
 	} else {
 		help_and_exit(command)
 	}

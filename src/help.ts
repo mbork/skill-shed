@@ -9,6 +9,7 @@ Usage: skill-shed <command> [options]
 Commands:
   init    Initialize a new skill directory
   deploy  Deploy a skill to its target directory
+  lint    Lint a skill directory for errors and warnings
   help    Show help for a command
 
 Global config: $SKILL_SHED_CONFIG (default: ~/.skill-shed.env, dotenv format)
@@ -51,6 +52,28 @@ Other options:
                do not abort if previous deployment was interrupted
   --help, -h   Show this help message`
 
+// ** lint
+const lint_help = `\
+Usage: skill-shed lint [skill-dir] [--clean | --workdir | --staged | --ref <ref>]
+
+Lint a skill directory for errors and warnings.
+
+Arguments:
+  skill-dir  Path to the skill directory (default: current directory)
+
+Source options (mutually exclusive; default: --clean):
+  --clean        Require clean git repo; lint working tree
+  --workdir      Lint working tree as-is (no cleanliness check)
+  --staged       Lint git index
+  --ref <ref>    Lint a specific git ref (tag, branch, or commit)
+
+Other options:
+  --help, -h  Show this help message
+
+Exit codes:
+  0  No errors (warnings may be present)
+  1  One or more errors found`
+
 // ** help
 const help_help = `\
 Usage: skill-shed help [command]
@@ -67,6 +90,7 @@ Options:
 const command_help: Record<string, string> = {
 	init: init_help,
 	deploy: deploy_help,
+	lint: lint_help,
 	help: help_help,
 }
 

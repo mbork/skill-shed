@@ -29,6 +29,14 @@ export async function run_init(skill_dir: string, deploy_dir?: string, flags: st
 	return run_script(['init', skill_dir, ...extra_args, ...flags], {env})
 }
 
+export async function run_lint(skill_dir: string, flags: string[] = []): Promise<Run_result> {
+	const env = {...process.env}
+	delete env.TARGET_DIRECTORY
+	await setup_git(skill_dir)
+	await git_commit(skill_dir)
+	return run_script(['lint', skill_dir, ...flags], {env})
+}
+
 export async function run_deploy(skill_dir: string, options: {cwd?: string, flags?: string[]} = {}): Promise<Run_result> {
 	const env = {...process.env}
 	delete env.TARGET_DIRECTORY

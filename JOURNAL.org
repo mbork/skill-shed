@@ -409,8 +409,9 @@ in the sidecar — deploy should abort unless =--force= is passed.
 ** Decisions
 ** Session log
 
-* TODO Skill linting
+* INPROGRESS Skill linting
 :LOGBOOK:
+- State "INPROGRESS" from "TODO"       [2026-04-22 Wed 10:46]
 - State "TODO"       from "BLOCKED"    [2026-04-21 Tue 09:30]
 :END:
 Lint skill files for common errors before deployment.
@@ -418,8 +419,9 @@ Lint skill files for common errors before deployment.
 ** Blocked by
 - [[*Preserve line numbers while comment stripping]]
 
-** Steps [0/10]
-- [ ] Check that `SKILL.md` exists (error)
+** Steps [0/12]
+- [X] Check that `SKILL.md` exists (error)
+- [ ] Check for conflicting source files (two files resolving to the same target name) (error)
 - [ ] Check for unclosed HTML comments (error); report file + line number
 - [ ] Check for unclosed fenced code blocks (error); applies to both =.source.md= and =.md= files
 - [ ] Validate frontmatter (required fields, non-empty values, known types) (error)
@@ -434,6 +436,8 @@ Lint skill files for common errors before deployment.
   the approximation explicitly
 - [ ] Warn on files in the skill directory not referenced anywhere in =SKILL.md= (warning:
   "file not referenced in SKILL.md")
+- [ ] Wire lint error checks into =deploy=: pass the already-built manifest to =lint_manifest=;
+  replace =validate_manifest= calls with the lint pass and delete =validate_manifest=
 
 ** Decisions
 *** [2026-04-21] – Two severity tiers: errors and warnings
