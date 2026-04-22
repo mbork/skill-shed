@@ -79,6 +79,7 @@ export async function init(
 			? strip_html_comments(substituted).content
 			: substituted
 		await writeFile(new_skill_path, skill_content)
+		console.log(`Created ${basename(new_skill_path)}`)
 	}
 
 	console.log(`Initialized ${skill_dir}`)

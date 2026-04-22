@@ -51,6 +51,7 @@ test('init: creates skill dir, .env, and SKILL.source.md by default', async () =
 	assert.strictEqual(result.code, 0)
 	assert.strictEqual(result.stderr.trim(), '')
 	assert.strictEqual(result.stdout.trim(), [
+		`Created SKILL.source.md`,
 		`Initialized ${skill_dir}`,
 		`TARGET_DIRECTORY=${deploy_dir}`,
 		`.env created in ${skill_dir}, don't forget to add it to .gitignore if you initialize a Git repo later`,
@@ -77,6 +78,7 @@ test('init: --no-comments creates SKILL.md instead', async () => {
 	assert.strictEqual(result.code, 0)
 	assert.strictEqual(result.stderr.trim(), '')
 	assert.strictEqual(result.stdout.trim(), [
+		`Created SKILL.md`,
 		`Initialized ${skill_dir}`,
 		`TARGET_DIRECTORY=${deploy_dir}`,
 		`.env created in ${skill_dir}, don't forget to add it to .gitignore if you initialize a Git repo later`,
@@ -103,6 +105,7 @@ test('init: --comments creates SKILL.source.md', async () => {
 	assert.strictEqual(result.code, 0)
 	assert.strictEqual(result.stderr.trim(), '')
 	assert.strictEqual(result.stdout.trim(), [
+		`Created SKILL.source.md`,
 		`Initialized ${skill_dir}`,
 		`TARGET_DIRECTORY=${deploy_dir}`,
 		`.env created in ${skill_dir}, don't forget to add it to .gitignore if you initialize a Git repo later`,
@@ -298,6 +301,7 @@ test('init: default deploy dir is ~/.agents/skills/<skill-name>', async () => {
 	assert.strictEqual(result.stderr.trim(), '')
 	const expected_deploy_dir = resolve(homedir(), '.agents', 'skills', basename(skill_dir))
 	assert.strictEqual(result.stdout.trim(), [
+		`Created SKILL.source.md`,
 		`Initialized ${skill_dir}`,
 		`TARGET_DIRECTORY=${expected_deploy_dir}`,
 		`.env created in ${skill_dir}, don't forget to add it to .gitignore if you initialize a Git repo later`,
@@ -366,6 +370,7 @@ test('init: .env message says "ignored by Git" when already ignored', async () =
 
 	assert.strictEqual(result.code, 0)
 	assert.strictEqual(result.stdout.trim(), [
+		`Created SKILL.source.md`,
 		`Initialized ${skill_dir}`,
 		`TARGET_DIRECTORY=${deploy_dir}`,
 		`.env created in ${skill_dir}, ignored by Git`,
@@ -381,6 +386,7 @@ test('init: .gitignore hint when .env is not ignored in git repo', async () => {
 
 	assert.strictEqual(result.code, 0)
 	assert.strictEqual(result.stdout.trim(), [
+		`Created SKILL.source.md`,
 		`Initialized ${skill_dir}`,
 		`TARGET_DIRECTORY=${deploy_dir}`,
 		`.env created in ${skill_dir}, add it to .gitignore`,
