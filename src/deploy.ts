@@ -1,8 +1,7 @@
 // * Imports
 import {mkdir, readFile, stat, unlink, writeFile} from 'node:fs/promises'
 import {dirname, resolve} from 'node:path'
-import {parseEnv, promisify} from 'node:util'
-import {execFile as execFile_cb} from 'node:child_process'
+import {parseEnv} from 'node:util'
 import {
 	build_manifest_from_command,
 	build_manifest_from_git_clean,
@@ -12,9 +11,8 @@ import {
 	validate_manifest,
 	type Manifest,
 } from './manifest.ts'
-import {expand_tilde} from './utils.ts'
+import {detect_git, expand_tilde} from './utils.ts'
 
-const execFile = promisify(execFile_cb)
 import {
 	collect_overwrite_violations,
 	collect_stale_violations,
@@ -88,23 +86,6 @@ async function read_skill_env(skill_dir: string): Promise<{
 	return {
 		absolute_target_dir: resolve(skill_dir, target_dir),
 		manifest_command: env.MANIFEST_COMMAND,
-	}
-}
-
-// * detect_git
-async function detect_git(dir: string): Promise<'no-git' | 'no-repo' | 'ok'> {
-	try {
-		await execFile('git', ['rev-parse', '--is-inside-work-tree'], {cwd: dir})
-		return 'ok'
-	} catch (e: unknown) {
-		const err = e as NodeJS.ErrnoException & {stderr?: string}
-		if (err.code === 'ENOENT') {
-			return 'no-git'
-		}
-		if (err.stderr?.includes('not a git repository')) {
-			return 'no-repo'
-		}
-		throw e
 	}
 }
 

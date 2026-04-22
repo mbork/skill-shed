@@ -2,6 +2,7 @@
 import {readFile} from 'node:fs/promises'
 import {resolve} from 'node:path'
 import {parseEnv} from 'node:util'
+import {detect_git} from './utils.ts'
 import {
 	build_manifest_from_command,
 	build_manifest_from_git_clean,
@@ -62,7 +63,17 @@ async function build_lint_manifest(skill_dir: string, source: ManifestSource): P
 	const manifest_command = await read_manifest_command(skill_dir)
 	if (manifest_command) {
 		return build_manifest_from_command(skill_dir, manifest_command)
-	} else if (source.kind === 'clean') {
+	}
+	const git_status = await detect_git(skill_dir)
+	if (git_status === 'no-git') {
+		console.error('Error: git not found; install git and run `git init`, or set MANIFEST_COMMAND in .env')
+		process.exit(1)
+	}
+	if (git_status === 'no-repo') {
+		console.error('Error: not a git repository; run `git init` or set MANIFEST_COMMAND in .env')
+		process.exit(1)
+	}
+	if (source.kind === 'clean') {
 		return build_manifest_from_git_clean(skill_dir)
 	} else if (source.kind === 'workdir') {
 		return build_manifest_from_git_workdir(skill_dir)
