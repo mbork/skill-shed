@@ -49,11 +49,30 @@ function check_no_conflicts(skill_dir: string, manifest: Manifest): LintMessage[
 	}))
 }
 
+// * check_no_unclosed_comments
+// Only checks .source.md files: .md files are deployed verbatim and comment structure
+// is outside skill-shed's boundary.
+function check_no_unclosed_comments(manifest: Manifest): LintMessage[] {
+	const messages: LintMessage[] = []
+	for (const entry of manifest) {
+		if (entry.unclosed_comment_line != null) {
+			messages.push({
+				file: entry.source_name,
+				line: entry.unclosed_comment_line + 1,
+				severity: 'error',
+				message: 'unclosed HTML comment',
+			})
+		}
+	}
+	return messages
+}
+
 // * lint_manifest
 function lint_manifest(skill_dir: string, manifest: Manifest): LintMessage[] {
 	return [
 		...check_skill_md_exists(skill_dir, manifest),
 		...check_no_conflicts(skill_dir, manifest),
+		...check_no_unclosed_comments(manifest),
 	]
 }
 

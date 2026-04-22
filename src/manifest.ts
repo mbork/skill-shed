@@ -21,6 +21,7 @@ export interface ManifestEntry {
 	source_content: string | Buffer
 	target_content: string | Buffer
 	line_map?: number[]
+	unclosed_comment_line?: number | null
 }
 
 export type Manifest = ManifestEntry[]
@@ -41,8 +42,10 @@ function make_manifest_entry(source_name: string, buffer: Buffer): ManifestEntry
 	const source_content = source_name.endsWith('.md') ? buffer.toString('utf8') : buffer
 	const target_name = target_filename(source_name)
 	if (source_name.endsWith('.source.md')) {
-		const {content, line_map} = strip_html_comments(source_content as string)
-		return {source_name, target_name, source_content, target_content: content, line_map}
+		const {content, line_map, unclosed_comment_line}
+			= strip_html_comments(source_content as string)
+		return {source_name, target_name, source_content, target_content: content,
+			line_map, unclosed_comment_line}
 	} else {
 		return {source_name, target_name, source_content, target_content: source_content}
 	}

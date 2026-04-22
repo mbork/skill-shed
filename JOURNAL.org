@@ -419,10 +419,10 @@ Lint skill files for common errors before deployment.
 ** Blocked by
 - [[*Preserve line numbers while comment stripping]]
 
-** Steps [2/12]
+** Steps [3/12]
 - [X] Check that `SKILL.md` exists (error)
 - [X] Check for conflicting source files (two files resolving to the same target name) (error)
-- [ ] Check for unclosed HTML comments (error); report file + line number
+- [X] Check for unclosed HTML comments (error); report file + line number
 - [ ] Check for unclosed fenced code blocks (error); applies to both =.source.md= and =.md= files
 - [ ] Validate frontmatter (required fields, non-empty values, known types) (error)
 - [ ] Check URLs with =--check-urls= flag: follow redirects, accept final 2xx; treat 401/403
@@ -440,6 +440,22 @@ Lint skill files for common errors before deployment.
   replace =validate_manifest= calls with the lint pass and delete =validate_manifest=
 
 ** Decisions
+*** [2026-04-22] – Unclosed HTML comment check applies to =.source.md= only; silently ignored in =.md= files
+**** Reason
+=.md= files are deployed verbatim — skill-shed performs no comment transformation on them, so
+checking comment structure is outside the tool's boundary.  HTML comments in =.md= are a
+legitimate authoring choice (non-rendered notes) and flagging them produces false positives.
+A warning on their existence would be paternalistic.  Keeping the check to =.source.md= files
+is honest: that's where an unclosed comment provably corrupts the deploy output (the rest of
+the file is stripped).  Bonus: simplifies =check_no_unclosed_comments= — no need to call
+=strip_html_comments= for plain =.md= entries.
+**** Alternatives considered
+- Error for =.md= too: contradicts "error = tool's own transform is broken"; =.md= deploys as written.
+- Warning for =.md= (existence of any comment): too many false positives; HTML comments in
+  =.md= are intentional in real skills.
+- Warning for unclosed comment only in =.md=: still a false positive risk; renderer behavior
+  is undefined and not skill-shed's responsibility.
+
 *** [2026-04-21] – Two severity tiers: errors and warnings
 **** Reason
 Three tiers (errors / warnings / slow checks) were considered but rejected: the third tier
