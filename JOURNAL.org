@@ -681,6 +681,16 @@ paragraphs trains authors to ignore lint output.
 
 ** Open questions
 ** Session log
+*** [2026-04-22] (session 2)
+- Completed: steps 1–3 — =check_skill_md_exists=, =check_no_conflicts=,
+  =check_no_unclosed_comments= (=.source.md= only); =ensure_git_or_abort= extracted to
+  =utils.ts=; =unclosed_comment_line= added to =ManifestEntry=; =test/CLAUDE.md= added;
+  =init= now prints =Created <filename>=; several bugfixes (git guard, error formatting)
+- In progress: NONE
+- Next: implement step 4 — check for unclosed fenced code blocks (error) in =src/lint.ts=
+- Blockers: NONE
+- Decisions: unclosed HTML comment check applies to =.source.md= only (logged above)
+
 *** [2026-04-22]
 - Completed: full design for Skill linting feature — all decisions logged; two new tasks
   added ("Did you mean?" hint, "Report error on unclosed HTML comment" absorbed into linting)
