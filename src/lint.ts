@@ -80,7 +80,13 @@ async function build_lint_manifest(skill_dir: string, source: ManifestSource): P
 
 // * lint
 export async function lint(skill_dir: string, source: ManifestSource): Promise<void> {
-	const manifest = await build_lint_manifest(skill_dir, source)
+	let manifest
+	try {
+		manifest = await build_lint_manifest(skill_dir, source)
+	} catch (e: unknown) {
+		console.error(`Error: ${(e as Error).message}`)
+		process.exit(1)
+	}
 	const messages = lint_manifest(skill_dir, manifest)
 	for (const msg of messages) {
 		console.log(format_lint_message(msg))
