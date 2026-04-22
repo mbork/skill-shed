@@ -135,6 +135,19 @@ after fallback from an absent or empty config, and for discoverability.
   inspect effective values — a discoverability gap for new users.
 ** Session log
 
+* TODO "Did you mean?" hint for unreferenced skill files
+When a file in the skill directory is flagged as unreferenced, check whether a similar
+string (Levenshtein distance ≤ 2) appears in the visited content and append a suggestion
+to the warning message.  Risk: short or common filenames produce spurious suggestions.
+Mitigation: only emit the hint if the similar string looks like a filename (contains a
+known extension or matches another file in the skill directory).
+
+** Steps [/]
+- [ ] Implement fuzzy hint in the unreferenced-file warning
+- [ ] Add tests for hint (true positive) and non-hint (short filename, no false positive)
+** Decisions
+** Session log
+
 * TODO Improve `strip_html_comments` test coverage
 Add missing test cases identified by static analysis against the
 CommonMark spec.
@@ -405,26 +418,260 @@ Lint skill files for common errors before deployment.
 ** Blocked by
 - [[*Preserve line numbers while comment stripping]]
 
-** Steps [/]
-- [ ] Check that `SKILL.md` exists
-- [ ] Check for unclosed HTML comments (`<!--` without `-->`)
-- [ ] Validate frontmatter (required fields, non-empty values, known types)
-- [ ] Count characters, words, and tokens in description field and full `SKILL.md`
-- [ ] Check that files referenced in `SKILL.md` exist
-- [ ] Warn on lines exceeding configurable length limit
-- [ ] Warn on empty sections (heading with no content)
-- [ ] Warn on duplicate headings
-- [ ] Maybe warn on files not referenced anywhere?
-- [ ] Check URLs in `SKILL.md` (opt-in, requires network)
+** Steps [0/10]
+- [ ] Check that `SKILL.md` exists (error)
+- [ ] Check for unclosed HTML comments (error); report file + line number
+- [ ] Check for unclosed fenced code blocks (error); applies to both =.source.md= and =.md= files
+- [ ] Validate frontmatter (required fields, non-empty values, known types) (error)
+- [ ] Check URLs with =--check-urls= flag: follow redirects, accept final 2xx; treat 401/403
+  as distinct warning ("may require auth"); treat 404/5xx/timeout/DNS failure as warning
+- [ ] Warn on empty sections — heading with no content (warning)
+- [ ] Warn on duplicate headings (warning)
+- [ ] Error if =description= exceeds 1024 characters (agentskills.io spec hard limit, see
+  https://agentskills.io/specification#frontmatter)
+- [ ] Warning if =SKILL.md= body exceeds 20000 characters (~5000 tokens at 4 chars/token);
+  message must cite https://agentskills.io/specification#progressive-disclosure and state
+  the approximation explicitly
+- [ ] Warn on files in the skill directory not referenced anywhere in =SKILL.md= (warning:
+  "file not referenced in SKILL.md")
+
 ** Decisions
+*** [2026-04-21] – Two severity tiers: errors and warnings
+**** Reason
+Three tiers (errors / warnings / slow checks) were considered but rejected: the third tier
+describes mechanism (network I/O), not severity, making naming misleading.  Two tiers with
+an opt-in flag for expensive checks is cleaner.  Boundary rule: /error = deploy would
+produce broken or undeployable output; warning = deploy succeeds but output may be
+suboptimal or non-conforming/.
+**** Alternatives considered
+- Three tiers (errors/warnings/slow): naming the third tier on a severity axis is
+  dishonest — a broken URL is not less severe than a duplicate heading.
+
+*** [2026-04-21] – =lint= runs errors + warnings; =--check-urls= opts in to URL checking
+**** Reason
+URL checks are slow and network-dependent.  Opt-in (=--check-urls=) avoids surprising users
+with slow or flaky lint runs.  =lint= without the flag is always fast and works offline.
+=deploy= does not accept =--check-urls= at all — silently ignoring a flag would be
+confusing.
+**** Alternatives considered
+- Opt-out (=--no-network=) on =lint=: constant paper cut for users without network; opt-in
+  is safer.
+
+*** [2026-04-21] – =deploy= runs only error checks, silences warnings
+**** Reason
+Deploy is a mechanical operation; style opinions should not abort it.  Silencing warnings
+entirely is simpler to implement (warning code path never runs) and keeps deploy output
+stable for scripting.
+**** Alternatives considered
+- Print warnings but don't abort: clutters deploy output; warnings would need to run anyway.
+
+*** [2026-04-21] – =lint= accepts same source-mode flags as =deploy= (=--clean=, =--workdir=, =--ref=)
+**** Reason
+Manifest-building functions already exist and are parameterized by source mode.  Lint
+operates on the same manifest entries, so the flags come for free.  Default is =--clean=,
+mirroring deploy.
+
+*** [2026-04-21] – Output format: =file:line: error: message= / =file:line: warning: message=
+**** Reason
+Standard compiler/linter format; parsed natively by editors and CI tools.  Deploy and lint
+share the identical format — deploy simply never emits =warning:= lines.  All output goes
+to stdout.
+**** Alternatives considered
+- Errors to stderr, warnings to stdout: complicates piping and scripting.
+
+*** [2026-04-21] – Exit codes: 1 on any error, 0 on warnings-only or clean
+**** Reason
+Standard convention.  Exit 0 on warnings means lint can be used in CI without being
+over-strict about style issues.  Exit 2 reserved for tool-level failures (unreadable file,
+bad invocation) if needed later.
+
+*** [2026-04-21] – Invalid URL is a warning, not an error
+**** Reason
+A URL that returns 4xx/5xx does not make the skill undeployable — it is a content quality
+issue.  Treating it as an error would block deployment over a temporarily unavailable
+external resource.  401/403 gets a distinct message ("may require authentication or be
+invalid") to give actionable information.
+**** Alternatives considered
+- Invalid URL as error: too strict; transient failures or auth-gated URLs would block deploy.
+
+*** [2026-04-21] – URL checks run in parallel with no concurrency limit
+**** Reason
+A single skill realistically has a handful of URLs.  Full parallelism is simpler and fast
+enough; rate-limiting or host saturation is not a realistic concern at this scale.
+
+*** [2026-04-21] – Unclosed fenced code block is an error for both =.source.md= and =.md= files
+**** Reason
+A file with an unclosed fence renders incorrectly regardless of whether comment stripping
+is involved — the deployed skill is broken either way.  Uniform treatment is simpler to
+document and implement; a per-file-type distinction would be surprising.
+**** Alternatives considered
+- Warning for =.md=, error for =.source.md=: too subtle; an unclosed fence is always broken
+  output from the reader's perspective.
+
+*** [2026-04-22] – No external Markdown parser/linter dependency for structural checks
+**** Reason
+A dedicated parser (e.g. =markdownlint=, =remark=) would subsume unclosed fences, empty
+sections, and duplicate headings, but: (1) adding a dependency requires explicit approval
+(project policy); (2) external linters report in their own format and don't integrate
+cleanly with skill-shed's =file:line: error: message= model; (3) they cover only a small
+fraction of the lint feature — frontmatter validation, unreferenced files, and comment
+checks still require custom code regardless.  The hand-rolled state machine is a small
+delta on top of logic already present in =strip_html_comments=.
+**** Alternatives considered
+- =markdownlint= / =remark=: correct and comprehensive for Markdown structure, but
+  dependency cost outweighs benefit given how little of the lint feature they would cover.
+
+*** [2026-04-21] – Unclosed-fence check runs on target content; uses line map for source line reporting
+**** Reason
+Checking target content (post-stripping) is correct by construction: a fence opener inside
+a stripped comment block is itself commented out and never appears in the deployed file, so
+not flagging it is correct behavior, not a silent miss.  The existing line map translates
+target line numbers back to source line numbers for =.source.md= files; plain =.md= files
+need no map since target = source.
+
+*** [2026-04-21] – Fence-tracking logic duplicated (with link comments) rather than abstracted
+**** Reason
+Exactly two call sites (=strip_html_comments= and the lint fence checker), trivial state
+machine, solo project.  A factory-function abstraction would be over-engineered for this
+scope.  Link comments make the duplication intentional and auditable.  If fence handling
+grows beyond ~10 lines or a third call site appears, extract the abstraction then.
+**** Alternatives considered
+- =make_fence_tracker()= factory function returning a =feed(line)= closure: correct
+  approach if complexity grows, but premature for two stable call sites.
+
+*** [2026-04-21] – Warn on skill directory files not reachable from =SKILL.md= via BFS
+**** Reason
+Unreferenced files are a useful signal for three real problems: (1) a filename typo in
+=SKILL.md= (the most important case — the referenced file appears missing and the actual
+file appears unreferenced); (2) stale files left over from a previous version of the
+skill; (3) files that should be in =.gitignore=.  Warning message is plain "file not
+referenced in SKILL.md" — no special-casing for =~= files or =.gitignore= suggestions,
+to avoid coupling the linter to git assumptions.
+
+A flat "search all files for each filename" approach was considered but rejected: two
+mutually-referencing orphaned files would each be found in the other and neither would be
+flagged.  BFS traversal from =SKILL.md= closes this gap with minimal extra complexity.
+Reference detection uses substring search (filename only, not full path) rather than
+Markdown link parsing, so references in prose, code blocks, and shell commands are all
+covered.
+
+Algorithm:
+#+begin_src
+visited   = {}
+unvisited = {all files in skill directory} \ {SKILL.md}
+queue     = [SKILL.md]
+
+while queue is non-empty:
+    file = dequeue(queue)
+    content = read(file)
+    visited.add(file)
+    for each f in unvisited:
+        if f.name appears in content:
+            unvisited.remove(f)
+            queue.enqueue(f)
+
+warn for each file remaining in unvisited
+#+end_src
+
+Known limitation: two files with the same name in different subdirectories could produce
+a false negative, but this is an unlikely edge case in a skill directory.
+
+*** [2026-04-21] – No file-existence check for paths in fenced-block info strings
+**** Reason
+Skills commonly contain template paths and placeholder examples (e.g. =src/your-file.ts=,
+=path/to/file.js=) in fenced block info strings.  There is no reliable way to distinguish
+a real file reference from an example, so false-positive rate is too high to be useful.
+A missing file would be caught at runtime anyway.
+**** Alternatives considered
+- Check only paths that exist somewhere in the skill directory: still fragile.
+- Opt-in =--check-files= flag: low value for the implementation cost.
+
+*** [2026-04-21] – Frontmatter validation: dedicated functions with error/warning severity
+**** Reason
+Frontmatter validation is encapsulated in two functions so the lint orchestrator does not
+embed knowledge of valid fields or values.  The URL comment is the authoritative source.
+Per-field validation depth varies: full validation for fields with enumerable or
+regex-testable values (=name=, =user-invocable=, =disable-model-invocation=, =effort=,
+=context=, =shell=); partial validation for complex fields (=allowed-tools=: check format
+only, flag unknown tool names as warnings).  Cross-field checks (e.g. combined
+=description= + =when_to_use= length > 1536 characters) cannot be expressed per-field and
+live in the top-level function.  Return type carries severity so warnings and errors are
+distinguished.
+
+#+begin_src typescript
+// See https://code.claude.com/docs/en/skills#frontmatter-reference
+type LintMessage = { severity: 'error' | 'warning', message: string };
+
+function validate_frontmatter_field(key: string, value: unknown): LintMessage[]
+function validate_frontmatter(fields: Record<string, unknown>): LintMessage[]
+// validate_frontmatter calls validate_frontmatter_field per entry, then runs cross-field checks
+#+end_src
+
+Portable (agentskills.io) frontmatter fields validated (from spec as of 2026-04-21):
+=name=, =description=, =license=, =compatibility=, =metadata=, =allowed-tools=.
+Tool-specific extensions (e.g. Claude Code's =disable-model-invocation=, =context=, =model=,
+etc.) are accepted without validation — skill-shed is a portable tool and any target agent
+may define its own extensions.
+
+*** [2026-04-21] – Only validate portable (agentskills.io spec) frontmatter fields; accept unknown fields silently
+**** Reason
+skill-shed is a portable tool — the same skill may be deployed to Claude Code, Cursor, or
+any future Agent Skills-compatible tool.  Each tool may define its own frontmatter
+extensions.  Validating or warning on tool-specific extensions would penalize legitimate
+multi-tool use and contradict the portability goal.  Only the six agentskills.io spec
+fields have defined semantics across all tools.
+**** Alternatives considered
+- Validate union of agentskills.io + Claude Code fields: ties skill-shed to Claude Code,
+  hostile to other tools' extensions.
+- Warn on all non-spec fields: same problem, plus noisy for every Claude-specific field.
+
+*** [2026-04-21] – Warn on unknown fields with Levenshtein distance ≤ 2 from a known field (typo detection)
+**** Reason
+Accepting unknown fields silently means typos (=desciption=, =naem=) pass undetected.
+Fuzzy-matching against the known portable field names catches likely typos without
+penalizing legitimate extensions — a field two edits away from =description= is almost
+certainly a mistake.
+**** Alternatives considered
+- Warn on all unknown fields: penalizes tool-specific extensions; rejected above.
+- Exact-match only: silently accepts typos; user gets no feedback on likely mistakes.
+
+**** Alternatives considered
+- =is_known_frontmatter_key= + =validate_frontmatter_value= as two separate functions:
+  rejected — unknown key is just one possible error; a single function handles both in
+  sequence and callers only need one call.
+- =string | null= return type: insufficient once warnings are needed alongside errors.
+
+*** [2026-04-21] – =description= length > 1024 characters is an error; body > 20000 characters is a warning
+**** Reason
+The agentskills.io spec sets a hard 1024-character limit on =description= — exceeding it
+is a spec violation and an error.  The spec recommends keeping the =SKILL.md= body under
+5000 tokens (see https://agentskills.io/specification#progressive-disclosure); this is a
+soft recommendation, so a warning is appropriate.  A real tokenizer is not needed: the
+4 characters/token approximation is well-known and sufficient for a lint hint.  Warning
+message must state the approximation explicitly so authors understand the figure is not
+exact, e.g. "body is approximately N tokens (4 chars/token approximation) — the
+agentskills.io spec recommends keeping it under 5000 tokens".
+
+*** [2026-04-21] – No line length check
+**** Reason
+Line length is an author preference, not a correctness concern.  Soft-wrapping workflows
+(e.g. Emacs) and most Markdown renderers handle long lines gracefully.  The agentskills.io
+spec imposes no line length constraint.  A warning that fires on organically-written
+paragraphs trains authors to ignore lint output.
+
 ** Open questions
-- what valid values exist for which frontmatter field?
-- Output format: all messages to stdout, or errors to stderr / warnings+info to stdout?
-- Line length limit: configurable via ~.env~, CLI flag, or hardcoded default (100)?
-- Token counting: is a chars/4 approximation acceptable, or is a real tokenizer needed?
-- Line numbers after pandoc conversion: lint messages would reference converted Markdown
-  line numbers, not original source — acceptable as a known limitation?
 ** Session log
+*** [2026-04-22]
+- Completed: full design for Skill linting feature — all decisions logged; two new tasks
+  added ("Did you mean?" hint, "Report error on unclosed HTML comment" absorbed into linting)
+- In progress: NONE — design phase complete, ready for implementation
+- Next: begin implementing =lint= subcommand; start with =validate_frontmatter_field= and
+  =validate_frontmatter= functions
+- Blockers: NONE
+- Decisions: all logged above (two severity tiers; CLI UI; exit codes; source modes;
+  output format; unclosed fence/comment as errors; no line length check; token counting;
+  portable-fields-only frontmatter validation; Levenshtein typo detection; unreferenced
+  file BFS algorithm; no file-existence check for fenced info strings)
 
 * DONE Preserve line numbers while comment stripping
 :LOGBOOK:
