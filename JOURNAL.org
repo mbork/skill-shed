@@ -419,11 +419,11 @@ Lint skill files for common errors before deployment.
 ** Blocked by
 - [[*Preserve line numbers while comment stripping]]
 
-** Steps [3/12]
+** Steps [4/12]
 - [X] Check that `SKILL.md` exists (error)
 - [X] Check for conflicting source files (two files resolving to the same target name) (error)
 - [X] Check for unclosed HTML comments (error); report file + line number
-- [ ] Check for unclosed fenced code blocks (error); applies to both =.source.md= and =.md= files
+- [X] Check for unclosed fenced code blocks (error); applies to both =.source.md= and =.md= files
 - [ ] Validate frontmatter (required fields, non-empty values, known types) (error)
 - [ ] Check URLs with =--check-urls= flag: follow redirects, accept final 2xx; treat 401/403
   as distinct warning ("may require auth"); treat 404/5xx/timeout/DNS failure as warning
@@ -440,6 +440,44 @@ Lint skill files for common errors before deployment.
   replace =validate_manifest= calls with the lint pass and delete =validate_manifest=
 
 ** Decisions
+*** [2026-04-22] – Linter scope rule: skill correctness, not Markdown syntax (boundary = transforms skill-shed owns)
+**** Reason
+Needed a durable rule to decide future checks.  Principle: a skill linter answers "is this
+set of instructions for an LLM correct?", not "is this Markdown formatted correctly?".
+Concretely: check only what skill-shed /owns via a transform/ — comment stripping is
+in-scope (skill-shed strips comments, so broken comments break /our/ output); fenced-code
+syntax is not (skill-shed doesn't transform fences).  This also keeps the linter
+format-agnostic: future source formats (e.g. Org → md via Emacs batch) must still pass
+the same skill-correctness checks.
+**** Alternatives considered
+- Catch-all Markdown-syntax validation: out of scope; duplicates what a Markdown-aware
+  editor already surfaces instantly, and would bind the linter to Markdown forever.
+- Drop the unclosed-fence check entirely on scope grounds: almost taken, but reversed —
+  =make_fence_tracker()= is needed anyway for the in-scope heading checks (steps 7/8,
+  since a =#= inside a fence is code, not a heading), so reporting unclosed fences is a
+  cost-of-opportunity side-effect.  Explicitly NOT a precedent for other Markdown-syntax
+  checks.
+
+*** [2026-04-22] – Extract =make_fence_tracker()= into =src/md-parse.ts= (supersedes 2026-04-21 "duplicated with link comments")
+**** Reason
+The earlier decision (duplicate the fence state machine with link comments) was premised
+on "exactly two call sites, trivial state machine".  Two facts shifted: (1) steps 7/8
+(duplicate/empty section detection) require fence-aware heading detection — a real third
+call site, and the first one that doesn't already have the state machine inline; (2) user
+explicitly asked to share the code.  A composable factory =make_fence_tracker()= with
+=feed(line, idx) -> boolean= and =is_open= / =unclosed_line= getters is the minimal
+abstraction that covers all three sites without coupling independent concerns (fences vs.
+comments vs. headings).  Comment-stripping is /not/ extracted in the same pass: still a
+single caller and no second site on the horizon (YAGNI).
+**** Alternatives considered
+- Keep duplicating per the 2026-04-21 decision: no longer fits — a third site appears and
+  the state machine is non-trivial once length/char matching is in play.
+- =parse_md(strip_comments: boolean)= god-function: rejected — a boolean flag couples
+  independent concerns (fence tracking, comment stripping, heading detection) and makes
+  the signature lie about what the function does.
+- Extract comment-stripping too: deferred — only one caller, YAGNI.  Revisit if a second
+  site appears.
+
 *** [2026-04-22] – Unclosed HTML comment check applies to =.source.md= only; silently ignored in =.md= files
 **** Reason
 =.md= files are deployed verbatim — skill-shed performs no comment transformation on them, so
@@ -681,6 +719,31 @@ paragraphs trains authors to ignore lint output.
 
 ** Open questions
 ** Session log
+*** [2026-04-23] (session 4)
+- Completed: human review of step 4 changes; two clarifying comments added to
+  =strip-html-comments.ts= (short-circuit gate, =fence.is_open ||= redundancy); test
+  improvements in =md-parse.test.ts= (mid-open =unclosed_line= assertions, two new
+  language-tag open/close tests) and =lint.test.ts= (multiline comment, body lines,
+  title fix) — all still unstaged
+- In progress: NONE
+- Next: step 5 — frontmatter validation
+- Blockers: NONE
+- Decisions: getters kept (property-read syntax matches "state" mental model, user
+  accepted); identified gap: no test for fence inside unclosed comment in
+  =strip-html-comments.test.ts= (not yet addressed)
+
+*** [2026-04-22] (session 3)
+- Completed: step 4 — =check_no_unclosed_fences= in =src/lint.ts=; new =src/md-parse.ts=
+  module with =make_fence_tracker()=; =strip_html_comments= refactored to use the tracker
+  and now exposes =unclosed_fence_line=; =ManifestEntry= carries =unclosed_fence_line=;
+  latent bug fixed (a =\`\`\`= inside a multi-line =<!-- ... -->= no longer opens a
+  spurious fence); 14 unit tests for tracker + 11 lint tests; all tests/typecheck/lint green
+- In progress: NONE
+- Next: human review, then step 5 — frontmatter validation
+- Blockers: NONE
+- Decisions: linter scope rule; =make_fence_tracker()= extraction supersedes
+  2026-04-21 duplication decision (both logged above)
+
 *** [2026-04-22] (session 2)
 - Completed: steps 1–3 — =check_skill_md_exists=, =check_no_conflicts=,
   =check_no_unclosed_comments= (=.source.md= only); =ensure_git_or_abort= extracted to

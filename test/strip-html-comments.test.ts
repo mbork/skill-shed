@@ -10,6 +10,7 @@ test('strip_html_comments: empty input unchanged', () => {
 		content: '',
 		line_map: [0],
 		unclosed_comment_line: null,
+		unclosed_fence_line: null,
 	})
 })
 
@@ -24,6 +25,7 @@ test('strip_html_comments: no comments → unchanged', () => {
 		content: input,
 		line_map: [0, 1, 2, 3],
 		unclosed_comment_line: null,
+		unclosed_fence_line: null,
 	})
 })
 
@@ -32,6 +34,7 @@ test('strip_html_comments: no trailing newline → unchanged', () => {
 		content: 'a\nb',
 		line_map: [0, 1],
 		unclosed_comment_line: null,
+		unclosed_fence_line: null,
 	})
 })
 
@@ -48,6 +51,7 @@ test('strip_html_comments: inline comment removed', () => {
 			].join('\n'),
 			line_map: [0, 1],
 			unclosed_comment_line: null,
+			unclosed_fence_line: null,
 		},
 	)
 })
@@ -69,6 +73,7 @@ test('strip_html_comments: full-line comment dropped', () => {
 			// source line 1 (comment) dropped
 			line_map: [0, 2, 3],
 			unclosed_comment_line: null,
+			unclosed_fence_line: null,
 		},
 	)
 })
@@ -93,6 +98,7 @@ test('strip_html_comments: comment between blank lines collapses to one blank li
 			// source line 2 dropped (comment), source line 3 suppressed (blank collapse)
 			line_map: [0, 1, 4, 5],
 			unclosed_comment_line: null,
+			unclosed_fence_line: null,
 		},
 	)
 })
@@ -120,6 +126,7 @@ test('strip_html_comments: one blank line before comment, multiple after — fir
 			// source line 4 passes through (was_comment_stripped already reset)
 			line_map: [0, 1, 4, 5, 6],
 			unclosed_comment_line: null,
+			unclosed_fence_line: null,
 		},
 	)
 })
@@ -146,6 +153,7 @@ test('strip_html_comments: multiple blank lines before comment are preserved', (
 			// source line 3 dropped (comment), source line 4 suppressed (blank collapse after two blanks)
 			line_map: [0, 1, 2, 5, 6],
 			unclosed_comment_line: null,
+			unclosed_fence_line: null,
 		},
 	)
 })
@@ -169,6 +177,7 @@ test('strip_html_comments: multiline comment dropped', () => {
 			// source lines 1–3 all dropped
 			line_map: [0, 4, 5],
 			unclosed_comment_line: null,
+			unclosed_fence_line: null,
 		},
 	)
 })
@@ -192,6 +201,7 @@ test('strip_html_comments: comment starts mid-line, spans multiple lines, text f
 			// source line 1 dropped; source lines 0, 2, 3, 4 kept
 			line_map: [0, 2, 3, 4],
 			unclosed_comment_line: null,
+			unclosed_fence_line: null,
 		},
 	)
 })
@@ -209,6 +219,7 @@ test('strip_html_comments: multiple comments on one line', () => {
 			].join('\n'),
 			line_map: [0, 1],
 			unclosed_comment_line: null,
+			unclosed_fence_line: null,
 		},
 	)
 })
@@ -223,6 +234,7 @@ test('strip_html_comments: --> without preceding <!-- is left as-is', () => {
 		content: input,
 		line_map: [0, 1, 2],
 		unclosed_comment_line: null,
+		unclosed_fence_line: null,
 	})
 })
 
@@ -240,6 +252,7 @@ test('strip_html_comments: nested-looking comments — HTML does not nest', () =
 			].join('\n'),
 			line_map: [0, 1],
 			unclosed_comment_line: null,
+			unclosed_fence_line: null,
 		},
 	)
 })
@@ -255,6 +268,7 @@ test('strip_html_comments: comment inside fenced code block preserved', () => {
 		content: input,
 		line_map: [0, 1, 2, 3],
 		unclosed_comment_line: null,
+		unclosed_fence_line: null,
 	})
 })
 
@@ -269,6 +283,7 @@ test('strip_html_comments: comment inside tilde-fenced block preserved', () => {
 		content: input,
 		line_map: [0, 1, 2, 3],
 		unclosed_comment_line: null,
+		unclosed_fence_line: null,
 	})
 })
 
@@ -284,6 +299,7 @@ test('strip_html_comments: multiline comment inside fenced block preserved', () 
 		content: input,
 		line_map: [0, 1, 2, 3, 4],
 		unclosed_comment_line: null,
+		unclosed_fence_line: null,
 	})
 })
 
@@ -298,6 +314,7 @@ test('strip_html_comments: fence opener with info string', () => {
 		content: input,
 		line_map: [0, 1, 2, 3],
 		unclosed_comment_line: null,
+		unclosed_fence_line: null,
 	})
 })
 
@@ -314,6 +331,7 @@ test('strip_html_comments: longer fence not closed by shorter fence', () => {
 		content: input,
 		line_map: [0, 1, 2, 3, 4],
 		unclosed_comment_line: null,
+		unclosed_fence_line: null,
 	})
 })
 
@@ -329,6 +347,7 @@ test('strip_html_comments: unclosed fence — all lines pass through including <
 		content: input,
 		line_map: [0, 1, 2, 3],
 		unclosed_comment_line: null,
+		unclosed_fence_line: 0,
 	})
 })
 
@@ -344,6 +363,7 @@ test('strip_html_comments: unclosed <!-- inside fenced block → unclosed_commen
 		content: input,
 		line_map: [0, 1, 2, 3],
 		unclosed_comment_line: null,
+		unclosed_fence_line: null,
 	})
 })
 
@@ -368,6 +388,33 @@ test('strip_html_comments: nested-looking multiline comments — inner --> close
 			// source lines 1–3 dropped; source line 4 is now plain text (comment already closed)
 			line_map: [0, 4, 5, 6],
 			unclosed_comment_line: null,
+			unclosed_fence_line: null,
+		},
+	)
+})
+
+test('strip_html_comments: fence opener inside a multi-line comment is stripped, not treated as a fence', () => {
+	// `\`\`\`` inside an open <!-- ... --> block is comment content, not a fence opener.
+	// Without this rule, the "fence" would never close and the rest of the file would
+	// leak through unstripped.
+	assert.deepStrictEqual(
+		strip_html_comments([
+			'before',
+			'<!--',
+			'```',
+			'-->',
+			'after',
+			'',
+		].join('\n')),
+		{
+			content: [
+				'before',
+				'after',
+				'',
+			].join('\n'),
+			line_map: [0, 4, 5],
+			unclosed_comment_line: null,
+			unclosed_fence_line: null,
 		},
 	)
 })
@@ -384,6 +431,7 @@ test('strip_html_comments: unclosed <!-- in unclosed fence → fence wins, unclo
 		content: input,
 		line_map: [0, 1, 2, 3],
 		unclosed_comment_line: null,
+		unclosed_fence_line: 0,
 	})
 })
 

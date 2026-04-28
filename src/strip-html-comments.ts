@@ -1,19 +1,21 @@
 // * Strip HTML comments from Markdown
 // Fenced-code-block-aware: comments inside ``` or ~~~ blocks are preserved.
 
+import {make_fence_tracker} from './md-parse.ts'
+
 export interface StripResult {
 	content: string
 	// line_map[i] is the 0-based source line index for output line i
 	line_map: number[]
 	// 0-based source line index where an unclosed <!-- begins, or null if all closed
 	unclosed_comment_line: number | null
+	// 0-based source line index where an unclosed fence opens, or null if all closed
+	unclosed_fence_line: number | null
 }
 
 export function strip_html_comments(content: string): StripResult {
 	const lines = content.split('\n')
-	let is_in_fence = false
-	let fence_char = ''
-	let fence_min_length = 0
+	const fence = make_fence_tracker()
 	let is_in_comment = false
 	let unclosed_comment_line: number | null = null
 	let was_last_pushed_blank = false
@@ -24,27 +26,18 @@ export function strip_html_comments(content: string): StripResult {
 	for (let src = 0; src < lines.length; src++) {
 		const line = lines[src]
 
-		if (is_in_fence) {
-			const match = line.match(/^(`{3,}|~{3,})\s*$/)
-			if (match && match[1][0] === fence_char && match[1].length >= fence_min_length) {
-				is_in_fence = false
-			}
+		// Only consider fence openers when not inside a comment; otherwise a `\`\`\``
+		// that appears inside a multi-line comment would spuriously open a fence.
+		// Fence closers still fire while is_in_fence is true (which implies
+		// is_in_comment is false by construction — we don't strip comments inside fences).
+		// The && short-circuits: fence.feed() is only called when the left side is true,
+		// making the left side a gate that suppresses fence.feed()'s side effects.
+		// (fence.is_open || ...) is logically redundant — an open fence implies !is_in_comment
+		// by construction — but kept to make both guarded cases explicit.
+		if ((fence.is_open || !is_in_comment) && fence.feed(line, src)) {
 			result.push(line)
 			line_map.push(src)
 			was_last_pushed_blank = line.trim() === ''
-			was_comment_stripped = false
-			continue
-		}
-
-		// Check for fence opener
-		const fence_match = line.match(/^(`{3,}|~{3,})/)
-		if (fence_match) {
-			is_in_fence = true
-			fence_char = fence_match[1][0]
-			fence_min_length = fence_match[1].length
-			result.push(line)
-			line_map.push(src)
-			was_last_pushed_blank = false
 			was_comment_stripped = false
 			continue
 		}
@@ -99,5 +92,6 @@ export function strip_html_comments(content: string): StripResult {
 		content: result.join('\n'),
 		line_map,
 		unclosed_comment_line,
+		unclosed_fence_line: fence.unclosed_line,
 	}
 }

@@ -12,6 +12,7 @@ import {
 	find_target_conflicts,
 	type Manifest,
 } from './manifest.ts'
+import {make_fence_tracker} from './md-parse.ts'
 import type {ManifestSource} from './deploy.ts'
 
 // * Types
@@ -67,12 +68,47 @@ function check_no_unclosed_comments(manifest: Manifest): LintMessage[] {
 	return messages
 }
 
+// * check_no_unclosed_fences
+// Applies to both .source.md and .md files.  For .source.md, unclosed_fence_line is
+// already populated by strip_html_comments against source line indices (no line-map
+// translation needed).  For .md, run a fresh tracker over the content.
+function check_no_unclosed_fences(manifest: Manifest): LintMessage[] {
+	const messages: LintMessage[] = []
+	for (const entry of manifest) {
+		if (typeof entry.target_content !== 'string') {
+			continue
+		}
+		let unclosed_line: number | null
+		if (entry.unclosed_fence_line !== undefined) {
+			unclosed_line = entry.unclosed_fence_line
+		} else {
+			const fence = make_fence_tracker()
+			const lines = entry.target_content.split('\n')
+			for (let i = 0; i < lines.length; i++) {
+				fence.feed(lines[i], i)
+			}
+			unclosed_line = fence.unclosed_line
+		}
+		if (unclosed_line === null) {
+			continue
+		}
+		messages.push({
+			file: entry.source_name,
+			line: unclosed_line + 1,
+			severity: 'error',
+			message: 'unclosed fenced code block',
+		})
+	}
+	return messages
+}
+
 // * lint_manifest
 function lint_manifest(skill_dir: string, manifest: Manifest): LintMessage[] {
 	return [
 		...check_skill_md_exists(skill_dir, manifest),
 		...check_no_conflicts(skill_dir, manifest),
 		...check_no_unclosed_comments(manifest),
+		...check_no_unclosed_fences(manifest),
 	]
 }
 
