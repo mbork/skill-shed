@@ -419,6 +419,25 @@ test('strip_html_comments: fence opener inside a multi-line comment is stripped,
 	)
 })
 
+test('strip_html_comments: fence opener inside unclosed comment → comment wins, unclosed_fence_line is null', () => {
+	// ``` inside an open <!-- that never closes is comment content, not a fence opener.
+	// The unclosed entity is the comment; unclosed_fence_line must remain null.
+	assert.deepStrictEqual(
+		strip_html_comments([
+			'text',
+			'<!--',
+			'```',
+			'still inside a comment but not inside a fence',
+		].join('\n')),
+		{
+			content: 'text',
+			line_map: [0],
+			unclosed_comment_line: 1,
+			unclosed_fence_line: null,
+		},
+	)
+})
+
 test('strip_html_comments: unclosed <!-- in unclosed fence → fence wins, unclosed_comment_line is null', () => {
 	// Fence takes full precedence; <!-- is never processed even though fence never closes
 	const input = [
