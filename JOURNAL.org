@@ -5,6 +5,10 @@ A set of tools (in the form of a Node.js CLI script) for managing
 agent skills: format conversion, comment stripping, linting,
 deployment.  Currently in WiP/PoC stage.
 
+* TODO Run linter against a real skill collection for integration validation
+Download a publicly available skill collection and run =skill-shed lint= on them to catch
+false positives and missing real-error detections.
+
 * DONE Friendly `parseArgs` error reporting and test helper cleanup
 Fix raw stack traces on bad CLI args; clean up test helpers; remove noisy ESLint rules.
 
@@ -425,6 +429,18 @@ Lint skill files for common errors before deployment.
 - [X] Check for unclosed HTML comments (error); report file + line number
 - [X] Check for unclosed fenced code blocks (error); applies to both =.source.md= and =.md= files
 - [ ] Validate frontmatter (required fields, non-empty values, known types) (error)
+  - [ ] Add =yaml= and =leven= to =package.json=; pin exact versions
+  - [ ] Add =LintMessage= type ={ severity: 'error'|'warning', line: number, message: string }= to
+    =src/lint.ts=; export it
+  - [ ] New =src/frontmatter.ts=: =extract_frontmatter(content)= — split leading =---= block (column 0,
+    optional trailing whitespace); call =yaml.parseDocument()=; return ={ fields, body, fm_start_line }=
+    or null if no frontmatter
+  - [ ] =validate_frontmatter_field(key, value, line)= — per-field type/constraint checks
+  - [ ] =validate_frontmatter(fields, fm_start_line, skill_dir_name)= — orchestrate field checks,
+    cross-field checks, Levenshtein typo detection (≤ 2 edits from a known portable field name)
+  - [ ] =check_frontmatter(entry, skill_dir_name)= in =src/lint.ts=; wire into =lint_manifest()=
+  - [ ] Document frontmatter =---= syntax in =README.org=
+  - [ ] Unit tests in =test/frontmatter.test.ts=; integration tests in =test/lint.test.ts=
 - [ ] Check URLs with =--check-urls= flag: follow redirects, accept final 2xx; treat 401/403
   as distinct warning ("may require auth"); treat 404/5xx/timeout/DNS failure as warning
 - [ ] Warn on empty sections — heading with no content (warning)
@@ -440,6 +456,47 @@ Lint skill files for common errors before deployment.
   replace =validate_manifest= calls with the lint pass and delete =validate_manifest=
 
 ** Decisions
+*** [2026-04-28] – Switch from =js-yaml= to =yaml= for frontmatter parsing
+**** Reason
+=js-yaml='s public =load()= API does not expose per-key line numbers.  =yaml= (eemeli) provides
+=parseDocument()= with character-offset ranges on every AST node, making line number derivation
+trivial.  =LintMessage= requires a =line= field, so this is non-optional.
+**** Alternatives considered
+- Keep =js-yaml= + post-parse scan (=^key:= regex over raw frontmatter text): works for simple
+  unquoted keys but breaks on quoted keys or multi-line values.
+
+*** [2026-04-28] – Use =leven= package for Levenshtein distance (typo detection)
+**** Reason
+Project policy prohibits hand-rolling what a well-tested package covers.  =leven= is 1.3 kB,
+zero transitive deps, and has been stable for years.  =fastest-levenshtein= is an equivalent
+alternative; =leven= chosen for longevity.
+
+*** [2026-04-28] – Frontmatter =---= delimiter rules
+**** Reason
+agentskills.io spec shows =---= examples but does not define delimiter syntax.  Adopting the
+universal convention (Jekyll, Hugo, Pandoc): opening =---= must be at column 0 on line 0; trailing
+whitespace after =---= is accepted (permissive); closing delimiter is =---= or =...= at column 0.
+Missing or malformed frontmatter is an error.  These rules are documented in =README.org=.
+
+References:
+- YAML 1.2.2 §9.2 Document Markers — https://yaml.org/spec/1.2.2/#912-document-markers
+- Jekyll front matter — https://jekyllrb.com/docs/front-matter/
+- Pandoc YAML metadata blocks — https://pandoc.org/MANUAL.html#extension-yaml_metadata_block
+**** Alternatives considered
+- Reject trailing whitespace after =---=: unnecessary strictness with no real-world benefit.
+
+*** [2026-04-28] – =name= must match parent directory name; =allowed-tools= is a space-separated string
+**** Reason
+Both are direct agentskills.io spec requirements (https://agentskills.io/specification#frontmatter).
+=name= constraints: 1–64 chars, =[a-z0-9](-[a-z0-9]+)*=, no consecutive hyphens, must equal the
+skill directory's basename.  =allowed-tools= is a plain space-separated string (e.g. =Bash(git:*) Read=),
+not a YAML list — validating it as a string avoids a false type error on legitimate skill files.
+
+The spec says "unicode lowercase alphanumeric characters (=a-z=)" which is self-contradictory: "unicode"
+suggests non-ASCII letters (=é=, =ñ= etc.) but the parenthetical =(a-z)= and every valid example are
+ASCII-only.  Implementing =[a-z0-9-]= (ASCII) as the parenthetical and table text ("Lowercase letters,
+numbers, and hyphens only") imply.  Logged as an open question; may be worth filing against the spec.
+
 *** [2026-04-22] – Linter scope rule: skill correctness, not Markdown syntax (boundary = transforms skill-shed owns)
 **** Reason
 Needed a durable rule to decide future checks.  Principle: a skill linter answers "is this
@@ -718,6 +775,12 @@ spec imposes no line length constraint.  A warning that fires on organically-wri
 paragraphs trains authors to ignore lint output.
 
 ** Open questions
+*** =name= field character set ambiguity in agentskills.io spec
+The spec body says "unicode lowercase alphanumeric characters (=a-z=)" which contradicts itself:
+"unicode" implies non-ASCII letters (=é=, =ñ=, =中=…) but the parenthetical =(a-z)= is ASCII-only.
+We implement =[a-z0-9-]= (ASCII) per the parenthetical and all examples.  Consider filing an
+issue against the spec to get a definitive answer.
+
 ** Session log
 *** [2026-04-23] (session 4)
 - Completed: human review of step 4 changes; two clarifying comments added to
