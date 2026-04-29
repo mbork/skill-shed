@@ -430,7 +430,7 @@ Lint skill files for common errors before deployment.
 - [X] Check for unclosed fenced code blocks (error); applies to both =.source.md= and =.md= files
 - [-] Validate frontmatter (required fields, non-empty values, known types) (error)
   - [X] Add =yaml= and =leven= to =package.json=; pin exact versions
-  - [ ] New =src/frontmatter.ts=: =extract_frontmatter(content)= — split leading =---= block (column 0,
+  - [X] New =src/frontmatter.ts=: =extract_frontmatter(content)= — split leading =---= block (column 0,
     optional trailing whitespace); call =yaml.parseDocument()=; return ={ fields, body, fm_start_line }=
     or null if no frontmatter
   - [ ] =validate_frontmatter_field(key, value, line)= — per-field type/constraint checks
