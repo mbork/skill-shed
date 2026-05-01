@@ -780,6 +780,20 @@ We implement =[a-z0-9-]= (ASCII) per the parenthetical and all examples.  Consid
 issue against the spec to get a definitive answer.
 
 ** Session log
+*** [2026-05-01] (session 5)
+- Completed: missing test added (fence inside unclosed comment in =strip-html-comments.test.ts=);
+  step-5 design decisions logged (=yaml= vs =js-yaml=, =leven=, =---= delimiter rules with spec
+  links, =name=/=allowed-tools= constraints, unicode/ASCII ambiguity open question); implementation
+  sublist added under step 5; new TODO task (run linter against real skill collection); new
+  =src/frontmatter.ts= with =extract_frontmatter()=; 14 unit tests in =test/frontmatter.test.ts=;
+  =fm_start_line= removed (always 0); all errors reported (not just first)
+- In progress: NONE
+- Next: =validate_frontmatter_field(key, value, line)= — per-field type/constraint checks
+- Blockers: NONE
+- Decisions: =yaml= over =js-yaml= (line numbers); =leven= for Levenshtein; delimiter rules
+  (column 0, trailing whitespace OK, =---=/=...= closing); =name= must match parent dir;
+  =allowed-tools= is space-separated string; unicode/ASCII ambiguity → implement =[a-z0-9-]=
+
 *** [2026-04-23] (session 4)
 - Completed: human review of step 4 changes; two clarifying comments added to
   =strip-html-comments.ts= (short-circuit gate, =fence.is_open ||= redundancy); test
