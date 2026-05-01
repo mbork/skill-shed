@@ -453,6 +453,14 @@ Lint skill files for common errors before deployment.
 - [ ] Wire lint error checks into =deploy=: pass the already-built manifest to =lint_manifest=;
   replace =validate_manifest= calls with the lint pass and delete =validate_manifest=
 
+** Session log
+*** [2026-05-01]
+- Completed: =validate_frontmatter_field= in =src/frontmatter.ts= with all 6 spec fields; 48 unit tests in =test/frontmatter.test.ts=; committed
+- In progress: step 5 (frontmatter validation) — =validate_frontmatter_field= done; =validate_frontmatter=, =check_frontmatter=, README docs, integration tests remain
+- Next: implement =validate_frontmatter(fields, fm_start_line, skill_dir_name)= — orchestrate field checks, cross-field checks (=name= vs dir), Levenshtein typo detection
+- Blockers: NONE
+- Decisions: NONE (all logged mid-session)
+
 ** Decisions
 *** [2026-05-01] – Validate all six spec-defined frontmatter fields
 **** Reason
