@@ -23,6 +23,8 @@ export type FrontmatterResult
 			field_lines: Map<string, number> // key → 1-based file line number
 		}
 
+export interface FieldIssue {line: number, severity: 'error' | 'warning', message: string}
+
 // * extract_frontmatter
 export function extract_frontmatter(content: string): FrontmatterResult {
 	const lines = content.split('\n')
@@ -74,4 +76,116 @@ export function extract_frontmatter(content: string): FrontmatterResult {
 	}
 
 	return {kind: 'ok', fields, body, field_lines}
+}
+
+// * validate_frontmatter_field
+// ** Constants
+const NAME_MAX = 64
+const NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
+const DESCRIPTION_MAX = 1024
+const COMPATIBILITY_MAX = 500
+
+// ** Helpers
+function validate_name_field(value: unknown, line: number): FieldIssue[] {
+	if (typeof value !== 'string') {
+		return [{line, severity: 'error', message: 'name: expected a string'}]
+	}
+	const issues: FieldIssue[] = []
+	if (value.length === 0) {
+		issues.push({line, severity: 'error', message: 'name: must not be empty'})
+	} else {
+		if (value.length > NAME_MAX) {
+			issues.push({line, severity: 'error', message: `name: exceeds ${NAME_MAX} characters`})
+		}
+		if (!NAME_RE.test(value)) {
+			issues.push({
+				line,
+				severity: 'error',
+				message:
+					'name: invalid format '
+					+ '(lowercase letters, digits, single non-leading and non-trailing hyphens)',
+			})
+		}
+	}
+	return issues
+}
+
+function validate_description_field(value: unknown, line: number): FieldIssue[] {
+	if (typeof value !== 'string') {
+		return [{line, severity: 'error', message: 'description: expected a string'}]
+	}
+	const issues: FieldIssue[] = []
+	if (value.length === 0) {
+		issues.push({line, severity: 'error', message: 'description: must not be empty'})
+	} else if (value.length > DESCRIPTION_MAX) {
+		issues.push({
+			line,
+			severity: 'error',
+			message: `description: exceeds ${DESCRIPTION_MAX} characters`,
+		})
+	}
+	return issues
+}
+
+function validate_license_field(value: unknown, line: number): FieldIssue[] {
+	if (typeof value !== 'string') {
+		return [{line, severity: 'error', message: 'license: expected a string'}]
+	}
+	return []
+}
+
+function validate_compatibility_field(value: unknown, line: number): FieldIssue[] {
+	if (typeof value !== 'string') {
+		return [{line, severity: 'error', message: 'compatibility: expected a string'}]
+	}
+	if (value.length === 0) {
+		return [{line, severity: 'error', message: 'compatibility: must not be empty'}]
+	}
+	if (value.length > COMPATIBILITY_MAX) {
+		return [{
+			line,
+			severity: 'error',
+			message: `compatibility: exceeds ${COMPATIBILITY_MAX} characters`,
+		}]
+	}
+	return []
+}
+
+function validate_metadata_field(value: unknown, line: number): FieldIssue[] {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+		return [{line, severity: 'error', message: 'metadata: expected a YAML mapping'}]
+	}
+	return []
+}
+
+function validate_allowed_tools_field(value: unknown, line: number): FieldIssue[] {
+	if (typeof value !== 'string') {
+		return [{
+			line,
+			severity: 'error',
+			message: 'allowed-tools: expected a string, not a YAML list or mapping',
+		}]
+	}
+	return []
+}
+
+// ** FIELD_VALIDATORS
+type FieldValidator = (value: unknown, line: number) => FieldIssue[]
+
+const FIELD_VALIDATORS: Record<string, FieldValidator> = {
+	'name': validate_name_field,
+	'description': validate_description_field,
+	'license': validate_license_field,
+	'compatibility': validate_compatibility_field,
+	'metadata': validate_metadata_field,
+	'allowed-tools': validate_allowed_tools_field,
+}
+
+export const KNOWN_FIELDS = new Set(Object.keys(FIELD_VALIDATORS))
+
+// ** validate_frontmatter_field
+export function validate_frontmatter_field(
+	key: string, value: unknown, line: number,
+): FieldIssue[] {
+	return FIELD_VALIDATORS[key]?.(value, line) ?? []
 }

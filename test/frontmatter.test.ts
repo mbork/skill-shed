@@ -1,7 +1,7 @@
 // * Imports
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {extract_frontmatter} from '../src/frontmatter.ts'
+import {extract_frontmatter, validate_frontmatter_field} from '../src/frontmatter.ts'
 
 // * extract_frontmatter
 
@@ -181,4 +181,236 @@ test('extract_frontmatter: field_lines only covers top-level keys', () => {
 	}
 	assert.ok(result.field_lines.has('metadata'))
 	assert.ok(!result.field_lines.has('author'))
+})
+
+// * validate_frontmatter_field
+// ** Message constants
+const NAME_EXPECTED_STRING = 'name: expected a string'
+const NAME_MUST_NOT_BE_EMPTY = 'name: must not be empty'
+const NAME_EXCEEDS_64 = 'name: exceeds 64 characters'
+const NAME_INVALID_FORMAT
+	= 'name: invalid format (lowercase letters, digits, single non-leading and non-trailing hyphens)'
+const DESCRIPTION_EXPECTED_STRING = 'description: expected a string'
+const DESCRIPTION_MUST_NOT_BE_EMPTY = 'description: must not be empty'
+const DESCRIPTION_EXCEEDS_1024 = 'description: exceeds 1024 characters'
+const LICENSE_EXPECTED_STRING = 'license: expected a string'
+const COMPATIBILITY_EXPECTED_STRING = 'compatibility: expected a string'
+const COMPATIBILITY_MUST_NOT_BE_EMPTY = 'compatibility: must not be empty'
+const COMPATIBILITY_EXCEEDS_500 = 'compatibility: exceeds 500 characters'
+const ALLOWED_TOOLS_EXPECTED_STRING = 'allowed-tools: expected a string, not a YAML list or mapping'
+const METADATA_EXPECTED_MAPPING = 'metadata: expected a YAML mapping'
+
+// ** name
+test('validate_frontmatter_field: name valid → no issues', () => {
+	assert.deepStrictEqual(validate_frontmatter_field('name', 'my-skill', 2), [])
+})
+
+test('validate_frontmatter_field: name valid single segment → no issues', () => {
+	assert.deepStrictEqual(validate_frontmatter_field('name', 'mysk1ll', 2), [])
+})
+
+test('validate_frontmatter_field: name non-string → error', () => {
+	const issues = validate_frontmatter_field('name', 42, 2)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, NAME_EXPECTED_STRING)
+	assert.equal(issues[0].line, 2)
+})
+
+test('validate_frontmatter_field: name null → error', () => {
+	const issues = validate_frontmatter_field('name', null, 2)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, NAME_EXPECTED_STRING)
+})
+
+test('validate_frontmatter_field: name empty string → error', () => {
+	const issues = validate_frontmatter_field('name', '', 2)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, NAME_MUST_NOT_BE_EMPTY)
+})
+
+test('validate_frontmatter_field: name exceeds 64 chars → error', () => {
+	const issues = validate_frontmatter_field('name', 'a'.repeat(65), 2)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, NAME_EXCEEDS_64)
+})
+
+test('validate_frontmatter_field: name exactly 64 chars → no issues', () => {
+	// 'a' + 31×'-a' + 'a' = 1 + 62 + 1 = 64 chars
+	const name = 'a' + '-a'.repeat(31) + 'a'
+	assert.equal(name.length, 64)
+	assert.deepStrictEqual(validate_frontmatter_field('name', name, 2), [])
+})
+
+test('validate_frontmatter_field: name with uppercase → error', () => {
+	const issues = validate_frontmatter_field('name', 'MySkill', 2)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, NAME_INVALID_FORMAT)
+})
+
+test('validate_frontmatter_field: name with leading hyphen → error', () => {
+	const issues = validate_frontmatter_field('name', '-my-skill', 2)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, NAME_INVALID_FORMAT)
+})
+
+test('validate_frontmatter_field: name with trailing hyphen → error', () => {
+	const issues = validate_frontmatter_field('name', 'my-skill-', 2)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, NAME_INVALID_FORMAT)
+})
+
+test('validate_frontmatter_field: name with consecutive hyphens → error', () => {
+	const issues = validate_frontmatter_field('name', 'my--skill', 2)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, NAME_INVALID_FORMAT)
+})
+
+test('validate_frontmatter_field: name too long AND invalid format → two errors', () => {
+	const issues = validate_frontmatter_field('name', 'A'.repeat(65), 2)
+	assert.equal(issues.length, 2)
+	assert.equal(issues[0].message, NAME_EXCEEDS_64)
+	assert.equal(issues[1].message, NAME_INVALID_FORMAT)
+})
+
+// ** description
+test('validate_frontmatter_field: description valid → no issues', () => {
+	assert.deepStrictEqual(validate_frontmatter_field('description', 'Does things.', 3), [])
+})
+
+test('validate_frontmatter_field: description non-string → error', () => {
+	const issues = validate_frontmatter_field('description', ['a'], 3)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, DESCRIPTION_EXPECTED_STRING)
+	assert.equal(issues[0].line, 3)
+})
+
+test('validate_frontmatter_field: description null → error', () => {
+	const issues = validate_frontmatter_field('description', null, 3)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, DESCRIPTION_EXPECTED_STRING)
+})
+
+test('validate_frontmatter_field: description empty string → error', () => {
+	const issues = validate_frontmatter_field('description', '', 3)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, DESCRIPTION_MUST_NOT_BE_EMPTY)
+})
+
+test('validate_frontmatter_field: description exceeds 1024 chars → error', () => {
+	const issues = validate_frontmatter_field('description', 'x'.repeat(1025), 3)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, DESCRIPTION_EXCEEDS_1024)
+})
+
+test('validate_frontmatter_field: description exactly 1024 chars → no issues', () => {
+	assert.deepStrictEqual(validate_frontmatter_field('description', 'x'.repeat(1024), 3), [])
+})
+
+// ** license
+test('validate_frontmatter_field: license valid string → no issues', () => {
+	assert.deepStrictEqual(validate_frontmatter_field('license', 'MIT', 5), [])
+})
+
+test('validate_frontmatter_field: license non-string → error', () => {
+	const issues = validate_frontmatter_field('license', 42, 5)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, LICENSE_EXPECTED_STRING)
+})
+
+// ** compatibility
+test('validate_frontmatter_field: compatibility valid string → no issues', () => {
+	assert.deepStrictEqual(validate_frontmatter_field('compatibility', 'Requires Node 20+', 5), [])
+})
+
+test('validate_frontmatter_field: compatibility non-string → error', () => {
+	const issues = validate_frontmatter_field('compatibility', null, 5)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, COMPATIBILITY_EXPECTED_STRING)
+})
+
+test('validate_frontmatter_field: compatibility empty string → error', () => {
+	const issues = validate_frontmatter_field('compatibility', '', 5)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, COMPATIBILITY_MUST_NOT_BE_EMPTY)
+})
+
+test('validate_frontmatter_field: compatibility exceeds 500 chars → error', () => {
+	const issues = validate_frontmatter_field('compatibility', 'x'.repeat(501), 5)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, COMPATIBILITY_EXCEEDS_500)
+})
+
+test('validate_frontmatter_field: compatibility exactly 500 chars → no issues', () => {
+	assert.deepStrictEqual(validate_frontmatter_field('compatibility', 'x'.repeat(500), 5), [])
+})
+
+// ** metadata
+test('validate_frontmatter_field: metadata valid mapping → no issues', () => {
+	assert.deepStrictEqual(validate_frontmatter_field('metadata', {author: 'alice'}, 5), [])
+})
+
+test('validate_frontmatter_field: metadata empty mapping → no issues', () => {
+	assert.deepStrictEqual(validate_frontmatter_field('metadata', {}, 5), [])
+})
+
+test('validate_frontmatter_field: metadata scalar → error', () => {
+	const issues = validate_frontmatter_field('metadata', 'not a mapping', 5)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, METADATA_EXPECTED_MAPPING)
+})
+
+test('validate_frontmatter_field: metadata list → error', () => {
+	const issues = validate_frontmatter_field('metadata', ['a', 'b'], 5)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, METADATA_EXPECTED_MAPPING)
+})
+
+test('validate_frontmatter_field: metadata null → error', () => {
+	const issues = validate_frontmatter_field('metadata', null, 5)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, METADATA_EXPECTED_MAPPING)
+})
+
+// ** allowed-tools
+test('validate_frontmatter_field: allowed-tools valid string → no issues', () => {
+	assert.deepStrictEqual(validate_frontmatter_field('allowed-tools', 'Bash Read Write', 4), [])
+})
+
+test('validate_frontmatter_field: allowed-tools YAML list → error', () => {
+	const issues = validate_frontmatter_field('allowed-tools', ['Bash', 'Read'], 4)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, ALLOWED_TOOLS_EXPECTED_STRING)
+	assert.equal(issues[0].line, 4)
+})
+
+test('validate_frontmatter_field: allowed-tools mapping → error', () => {
+	const issues = validate_frontmatter_field('allowed-tools', {Bash: true}, 4)
+	assert.equal(issues.length, 1)
+	assert.equal(issues[0].severity, 'error')
+	assert.equal(issues[0].message, ALLOWED_TOOLS_EXPECTED_STRING)
+})
+
+// ** unknown field
+test('validate_frontmatter_field: unknown field → no issues', () => {
+	assert.deepStrictEqual(validate_frontmatter_field('unknown-key', 'anything', 5), [])
 })

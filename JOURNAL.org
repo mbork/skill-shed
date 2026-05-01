@@ -433,7 +433,7 @@ Lint skill files for common errors before deployment.
   - [X] New =src/frontmatter.ts=: =extract_frontmatter(content)= — split leading =---= block (column 0,
     optional trailing whitespace); call =yaml.parseDocument()=; return ={ fields, body, fm_start_line }=
     or null if no frontmatter
-  - [ ] =validate_frontmatter_field(key, value, line)= — per-field type/constraint checks
+  - [X] =validate_frontmatter_field(key, value, line)= — per-field type/constraint checks
   - [ ] =validate_frontmatter(fields, fm_start_line, skill_dir_name)= — orchestrate field checks,
     cross-field checks, Levenshtein typo detection (≤ 2 edits from a known portable field name)
   - [ ] =check_frontmatter(entry, skill_dir_name)= in =src/lint.ts=; wire into =lint_manifest()=
@@ -454,6 +454,18 @@ Lint skill files for common errors before deployment.
   replace =validate_manifest= calls with the lint pass and delete =validate_manifest=
 
 ** Decisions
+*** [2026-05-01] – Validate all six spec-defined frontmatter fields
+**** Reason
+The agentskills.io spec defines exactly six portable fields: =name=, =description=, =license=,
+=compatibility=, =metadata=, =allowed-tools=.  All six are now in =KNOWN_FIELDS= and validated
+by =validate_frontmatter_field=.  Constraints per spec:
+- =name=: already implemented (64 chars, slug pattern)
+- =description=: add max 1024 char check (spec hard limit, previously deferred to step 10)
+- =license=: optional; must be a string
+- =compatibility=: optional; must be a string; max 500 chars
+- =metadata=: optional; must be a YAML mapping (not scalar or list)
+- =allowed-tools=: already implemented (must be a string)
+
 *** [2026-04-28] – Switch from =js-yaml= to =yaml= for frontmatter parsing
 **** Reason
 =js-yaml='s public =load()= API does not expose per-key line numbers.  =yaml= (eemeli) provides
