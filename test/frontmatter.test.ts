@@ -1,7 +1,7 @@
 // * Imports
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {extract_frontmatter, validate_frontmatter_field} from '../src/frontmatter.ts'
+import {extract_frontmatter, validate_frontmatter_field, validate_frontmatter} from '../src/frontmatter.ts'
 
 // * extract_frontmatter
 
@@ -16,13 +16,13 @@ test('extract_frontmatter: no frontmatter → none', () => {
 })
 
 test('extract_frontmatter: --- not at column 0 → none', () => {
-	assert.deepStrictEqual(extract_frontmatter(' ---\nname: foo\n---\n'), {kind: 'none'})
+	assert.deepStrictEqual(extract_frontmatter(' ---\nname: aqq\n---\n'), {kind: 'none'})
 })
 
 // ** kind: 'error'
 
 test('extract_frontmatter: unclosed frontmatter → error', () => {
-	const result = extract_frontmatter('---\nname: foo\n')
+	const result = extract_frontmatter('---\nname: aqq\n')
 	assert.equal(result.kind, 'error')
 	if (result.kind !== 'error') {
 		return
@@ -46,6 +46,15 @@ test('extract_frontmatter: non-mapping YAML (sequence) → error', () => {
 		return
 	}
 	assert.equal(result.message, 'frontmatter must be a YAML mapping')
+})
+
+test('extract_frontmatter: duplicate key → error', () => {
+	const result = extract_frontmatter('---\nname: aqq\nname: bęc\n---\n')
+	assert.equal(result.kind, 'error')
+	if (result.kind !== 'error') {
+		return
+	}
+	assert.ok(result.message.startsWith('invalid YAML in frontmatter: Map keys must be unique'))
 })
 
 // ** kind: 'ok' — fields and body
@@ -100,8 +109,8 @@ test('extract_frontmatter: closing ... is accepted', () => {
 test('extract_frontmatter: trailing whitespace on --- accepted', () => {
 	const result = extract_frontmatter([
 		'---  ',
-		'name: foo',
-		'description: bar',
+		'name: aqq',
+		'description: bęc',
 		'---  ',
 		'',
 	].join('\n'))
@@ -413,4 +422,107 @@ test('validate_frontmatter_field: allowed-tools mapping → error', () => {
 // ** unknown field
 test('validate_frontmatter_field: unknown field → no issues', () => {
 	assert.deepStrictEqual(validate_frontmatter_field('unknown-key', 'anything', 5), [])
+})
+
+// * validate_frontmatter
+
+// Helper: build field_lines with each key at line 2 unless overridden
+function make_field_lines(fields: Record<string, unknown>, overrides: Record<string, number> = {}): Map<string, number> {
+	const map = new Map<string, number>()
+	for (const key of Object.keys(fields)) {
+		map.set(key, overrides[key] ?? 2)
+	}
+	return map
+}
+
+// ** required fields
+
+test('validate_frontmatter: valid minimal skill → no issues', () => {
+	const fields = {name: 'my-skill', description: 'Does things.'}
+	const issues = validate_frontmatter(fields, make_field_lines(fields), 'my-skill')
+	assert.deepStrictEqual(issues, [])
+})
+
+test('validate_frontmatter: name missing → error at line 0', () => {
+	const fields = {description: 'Does things.'}
+	const issues = validate_frontmatter(fields, make_field_lines(fields), 'my-skill')
+	assert.deepStrictEqual(issues, [{line: 0, severity: 'error', message: 'name: required field is missing'}])
+})
+
+test('validate_frontmatter: description missing → error at line 0', () => {
+	const fields = {name: 'my-skill'}
+	const issues = validate_frontmatter(fields, make_field_lines(fields), 'my-skill')
+	assert.deepStrictEqual(issues, [{line: 0, severity: 'error', message: 'description: required field is missing'}])
+})
+
+test('validate_frontmatter: both required fields missing → two errors', () => {
+	const fields = {}
+	const issues = validate_frontmatter(fields, make_field_lines(fields), 'my-skill')
+	assert.deepStrictEqual(issues, [
+		{line: 0, severity: 'error', message: 'name: required field is missing'},
+		{line: 0, severity: 'error', message: 'description: required field is missing'},
+	])
+})
+
+// ** per-field validation (delegated to validate_frontmatter_field)
+
+test('validate_frontmatter: name wrong type → error', () => {
+	const fields = {name: 42, description: 'Does things.'}
+	const issues = validate_frontmatter(fields, make_field_lines(fields), 'my-skill')
+	assert.deepStrictEqual(issues, [{line: 2, severity: 'error', message: 'name: expected a string'}])
+})
+
+test('validate_frontmatter: description empty → error', () => {
+	const fields = {name: 'my-skill', description: ''}
+	const issues = validate_frontmatter(fields, make_field_lines(fields), 'my-skill')
+	assert.deepStrictEqual(issues, [{line: 2, severity: 'error', message: 'description: must not be empty'}])
+})
+
+test('validate_frontmatter: optional fields valid → no extra issues', () => {
+	const fields = {
+		'name': 'my-skill',
+		'description': 'Does things.',
+		'license': 'MIT',
+		'compatibility': 'claude-3',
+		'metadata': {author: 'me'},
+		'allowed-tools': 'Bash Read',
+	}
+	const issues = validate_frontmatter(fields, make_field_lines(fields), 'my-skill')
+	assert.deepStrictEqual(issues, [])
+})
+
+// ** cross-field: name vs skill_dir_name
+
+test('validate_frontmatter: name does not match dir → error at field line', () => {
+	const fields = {name: 'my-skill', description: 'Does things.'}
+	const field_lines = make_field_lines(fields, {name: 7})
+	const issues = validate_frontmatter(fields, field_lines, 'other-skill')
+	assert.deepStrictEqual(issues, [{
+		line: 7,
+		severity: 'error',
+		message: 'name: "my-skill" does not match skill directory name "other-skill"',
+	}])
+})
+
+// ** unknown fields and typo detection
+
+test('validate_frontmatter: unknown field, no close match → no issue', () => {
+	// "aqq" is ≥ 4 edits from every known field — silently ignored
+	const fields = {name: 'my-skill', description: 'Does things.', aqq: 'bęc'}
+	const issues = validate_frontmatter(fields, make_field_lines(fields), 'my-skill')
+	assert.deepStrictEqual(issues, [])
+})
+
+test('validate_frontmatter: typo in field name (1 edit) → warning with suggestion at field line', () => {
+	const fields = {name: 'my-skill', description: 'Does things.', nme: 'my-skill'}
+	const field_lines = make_field_lines(fields, {nme: 5})
+	const issues = validate_frontmatter(fields, field_lines, 'my-skill')
+	assert.deepStrictEqual(issues, [{line: 5, severity: 'warning', message: 'unknown field "nme" (did you mean "name"?)'}])
+})
+
+test('validate_frontmatter: typo in field name (2 edits) → warning with suggestion', () => {
+	// "metdatas" is 2 edits from "metadata" (verified with leven)
+	const fields = {name: 'my-skill', description: 'Does things.', metdatas: {x: 1}}
+	const issues = validate_frontmatter(fields, make_field_lines(fields), 'my-skill')
+	assert.deepStrictEqual(issues, [{line: 2, severity: 'warning', message: 'unknown field "metdatas" (did you mean "metadata"?)'}])
 })

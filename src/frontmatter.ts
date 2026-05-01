@@ -7,6 +7,7 @@
 //      https://pandoc.org/MANUAL.html#extension-yaml_metadata_block
 
 import {parseDocument, isMap, isScalar} from 'yaml'
+import {closestMatch} from 'leven'
 
 // * Types
 
@@ -188,4 +189,59 @@ export function validate_frontmatter_field(
 	key: string, value: unknown, line: number,
 ): FieldIssue[] {
 	return FIELD_VALIDATORS[key]?.(value, line) ?? []
+}
+
+// * validate_frontmatter
+const REQUIRED_FIELDS = ['name', 'description'] as const
+
+export function validate_frontmatter(
+	fields: Record<string, unknown>,
+	field_lines: Map<string, number>,
+	skill_dir_name: string,
+): FieldIssue[] {
+	const issues: FieldIssue[] = []
+
+	for (const required of REQUIRED_FIELDS) {
+		if (!(required in fields)) {
+			issues.push({
+				line: 0,
+				severity: 'error',
+				message: `${required}: required field is missing`,
+			})
+		}
+	}
+
+	// For each present field: validate known ones, warn on unknown ones (with typo hint).
+	const known_field_list = [...KNOWN_FIELDS]
+	for (const [key, value] of Object.entries(fields)) {
+		const line = field_lines.get(key)!
+		if (KNOWN_FIELDS.has(key)) {
+			issues.push(...validate_frontmatter_field(key, value, line))
+		} else {
+			const candidate = closestMatch(key, known_field_list, {maxDistance: 2})
+			if (candidate !== undefined) {
+				issues.push({
+					line,
+					severity: 'warning',
+					message: `unknown field "${key}" (did you mean "${candidate}"?)`,
+				})
+			}
+		}
+	}
+
+	// Cross-field: name must match skill directory name
+	if (typeof fields.name === 'string' && fields.name.length > 0) {
+		const line = field_lines.get('name')!
+		if (fields.name !== skill_dir_name) {
+			issues.push({
+				line,
+				severity: 'error',
+				message:
+					`name: "${fields.name}" does not match `
+					+ `skill directory name "${skill_dir_name}"`,
+			})
+		}
+	}
+
+	return issues
 }

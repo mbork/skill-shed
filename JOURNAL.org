@@ -434,7 +434,7 @@ Lint skill files for common errors before deployment.
     optional trailing whitespace); call =yaml.parseDocument()=; return ={ fields, body, fm_start_line }=
     or null if no frontmatter
   - [X] =validate_frontmatter_field(key, value, line)= — per-field type/constraint checks
-  - [ ] =validate_frontmatter(fields, fm_start_line, skill_dir_name)= — orchestrate field checks,
+  - [X] =validate_frontmatter(fields, field_lines, skill_dir_name)= — orchestrate field checks,
     cross-field checks, Levenshtein typo detection (≤ 2 edits from a known portable field name)
   - [ ] =check_frontmatter(entry, skill_dir_name)= in =src/lint.ts=; wire into =lint_manifest()=
   - [ ] Document frontmatter =---= syntax in =README.org=
