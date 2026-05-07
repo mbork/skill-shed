@@ -454,6 +454,13 @@ Lint skill files for common errors before deployment.
   replace =validate_manifest= calls with the lint pass and delete =validate_manifest=
 
 ** Session log
+*** [2026-05-07]
+- Completed: =check_frontmatter(entry, skill_dir_name)= in =src/lint.ts=; wired into =lint_manifest()=; =make_skill_dir(name?)= helper in =test/helpers.ts=; 7 new integration tests in =test/lint.test.ts=; all pre-existing "no errors" tests updated with valid frontmatter; all =make_tmp_dir= calls replaced with =make_skill_dir= in lint tests; committed
+- In progress: step 5 — README docs for frontmatter =---= syntax remain
+- Next: document frontmatter =---= delimiter rules in =README.org=
+- Blockers: NONE
+- Decisions: no warning for missing blank line after frontmatter (style-only, no functional impact); full string equality in new tests instead of regex; "no frontmatter" message uses actual source filename
+
 *** [2026-05-02]
 - Completed: =validate_frontmatter= in =src/frontmatter.ts= (required-field presence, per-field delegation, name/dir cross-field check, typo detection via =closestMatch=); 11 new unit tests; duplicate-key test for =extract_frontmatter=; committed
 - In progress: step 5 — =check_frontmatter= in =src/lint.ts=, integration tests in =test/lint.test.ts=, and README docs remain
