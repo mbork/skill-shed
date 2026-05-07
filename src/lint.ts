@@ -1,6 +1,6 @@
 // * Imports
 import {readFile} from 'node:fs/promises'
-import {resolve} from 'node:path'
+import {basename, resolve} from 'node:path'
 import {parseEnv} from 'node:util'
 import {ensure_git_or_abort} from './utils.ts'
 import {
@@ -11,8 +11,10 @@ import {
 	build_manifest_from_git_ref,
 	find_target_conflicts,
 	type Manifest,
+	type ManifestEntry,
 } from './manifest.ts'
 import {make_fence_tracker} from './md-parse.ts'
+import {extract_frontmatter, validate_frontmatter} from './frontmatter.ts'
 import type {ManifestSource} from './deploy.ts'
 
 // * Types
@@ -102,13 +104,47 @@ function check_no_unclosed_fences(manifest: Manifest): LintMessage[] {
 	return messages
 }
 
+// * check_frontmatter
+function check_frontmatter(entry: ManifestEntry, skill_dir_name: string): LintMessage[] {
+	if (typeof entry.target_content !== 'string') {
+		return []
+	}
+	const result = extract_frontmatter(entry.target_content)
+	if (result.kind === 'none') {
+		return [{
+			file: entry.source_name,
+			line: 0,
+			severity: 'error',
+			message: `${entry.source_name} has no frontmatter`,
+		}]
+	}
+	if (result.kind === 'error') {
+		return [{
+			file: entry.source_name,
+			line: 0,
+			severity: 'error',
+			message: `frontmatter error: ${result.message}`,
+		}]
+	}
+	const issues = validate_frontmatter(result.fields, result.field_lines, skill_dir_name)
+	return issues.map(issue => ({
+		file: entry.source_name,
+		line: issue.line,
+		severity: issue.severity,
+		message: issue.message,
+	}))
+}
+
 // * lint_manifest
 function lint_manifest(skill_dir: string, manifest: Manifest): LintMessage[] {
+	const skill_dir_name = basename(skill_dir)
+	const skill_md_entry = manifest.find(e => e.target_name === 'SKILL.md')
 	return [
 		...check_skill_md_exists(skill_dir, manifest),
 		...check_no_conflicts(skill_dir, manifest),
 		...check_no_unclosed_comments(manifest),
 		...check_no_unclosed_fences(manifest),
+		...(skill_md_entry != null ? check_frontmatter(skill_md_entry, skill_dir_name) : []),
 	]
 }
 

@@ -1,7 +1,7 @@
 // * Imports
 import {execFile} from 'node:child_process'
 import {promisify} from 'node:util'
-import {mkdtemp, writeFile} from 'node:fs/promises'
+import {mkdir, mkdtemp, writeFile} from 'node:fs/promises'
 import {tmpdir} from 'node:os'
 import {join, resolve, dirname} from 'node:path'
 import {fileURLToPath} from 'node:url'
@@ -60,6 +60,16 @@ export async function git_commit(dir: string): Promise<void> {
 
 export async function make_tmp_dir(): Promise<string> {
 	return mkdtemp(join(tmpdir(), 'skill-shed-test-'))
+}
+
+// Creates a temp dir, then a subdirectory with a known slug name inside it.
+// The subdirectory basename is guaranteed to match [a-z0-9]+(-[a-z0-9]+)*.
+// Use this when the test needs frontmatter with a matching `name` field.
+export async function make_skill_dir(name = 'my-skill'): Promise<string> {
+	const tmp = await make_tmp_dir()
+	const skill_dir = join(tmp, name)
+	await mkdir(skill_dir)
+	return skill_dir
 }
 
 // Returns non-comment, non-empty lines joined by newline — for asserting .env content

@@ -3,14 +3,24 @@ import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {writeFile} from 'node:fs/promises'
 import {join} from 'node:path'
-import {run_lint, make_tmp_dir} from './helpers.ts'
+import {run_lint, make_skill_dir} from './helpers.ts'
+
+// Minimal valid frontmatter for a skill dir named "my-skill" (the default from make_skill_dir).
+const FRONTMATTER = [
+	'---',
+	'name: my-skill',
+	'description: Test skill.',
+	'---',
+	'',
+	'',
+].join('\n')
 
 // * lint
 
 // ** SKILL.md existence
 
 test('lint: missing SKILL.md and SKILL.source.md is an error', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	await writeFile(join(skill_dir, 'helper.ts'), '// helper\n')
 
 	const result = await run_lint(skill_dir)
@@ -20,8 +30,8 @@ test('lint: missing SKILL.md and SKILL.source.md is an error', async () => {
 })
 
 test('lint: SKILL.md present — no errors', async () => {
-	const skill_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), '# My Skill\n')
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# My Skill\n')
 
 	const result = await run_lint(skill_dir)
 
@@ -30,8 +40,8 @@ test('lint: SKILL.md present — no errors', async () => {
 })
 
 test('lint: SKILL.source.md present — no errors', async () => {
-	const skill_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.source.md'), '# My Skill\n')
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.source.md'), FRONTMATTER + '# My Skill\n')
 
 	const result = await run_lint(skill_dir)
 
@@ -42,7 +52,7 @@ test('lint: SKILL.source.md present — no errors', async () => {
 // ** Conflict detection
 
 test('lint: conflicting source files is an error — one error per conflicting group', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	await writeFile(join(skill_dir, 'SKILL.md'), '# My Skill\n')
 	await writeFile(join(skill_dir, 'SKILL.source.md'), '# My Skill\n')
 	await writeFile(join(skill_dir, 'reference.md'), '# Ref\n')
@@ -58,7 +68,7 @@ test('lint: conflicting source files is an error — one error per conflicting g
 // ** Unclosed HTML comments
 
 test('lint: unclosed HTML comment in SKILL.source.md is an error with line number', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	await writeFile(join(skill_dir, 'SKILL.source.md'), [
 		'# Skill',
 		'',
@@ -75,8 +85,8 @@ test('lint: unclosed HTML comment in SKILL.source.md is an error with line numbe
 })
 
 test('lint: unclosed HTML comment in SKILL.md is silently accepted', async () => {
-	const skill_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), [
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
 		'# Skill',
 		'',
 		'<!-- unclosed',
@@ -92,8 +102,8 @@ test('lint: unclosed HTML comment in SKILL.md is silently accepted', async () =>
 })
 
 test('lint: closed HTML comment in SKILL.source.md is not an error', async () => {
-	const skill_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.source.md'), [
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.source.md'), FRONTMATTER + [
 		'# Skill',
 		'',
 		'<!-- comment -->',
@@ -111,7 +121,7 @@ test('lint: closed HTML comment in SKILL.source.md is not an error', async () =>
 // ** Unclosed fenced code blocks
 
 test('lint: unclosed ``` fence in SKILL.source.md is an error with source line number', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	await writeFile(join(skill_dir, 'SKILL.source.md'), [
 		'# Skill',
 		'',
@@ -127,7 +137,7 @@ test('lint: unclosed ``` fence in SKILL.source.md is an error with source line n
 })
 
 test('lint: unclosed ~~~ fence in SKILL.source.md is an error with source line number', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	await writeFile(join(skill_dir, 'SKILL.source.md'), [
 		'# Skill',
 		'',
@@ -143,7 +153,7 @@ test('lint: unclosed ~~~ fence in SKILL.source.md is an error with source line n
 })
 
 test('lint: unclosed fence in a plain .md file is an error with line number', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	await writeFile(join(skill_dir, 'SKILL.md'), '# Skill\n')
 	await writeFile(join(skill_dir, 'extra.md'), [
 		'# Extra',
@@ -160,8 +170,8 @@ test('lint: unclosed fence in a plain .md file is an error with line number', as
 })
 
 test('lint: closed fence in SKILL.source.md is not an error', async () => {
-	const skill_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.source.md'), [
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.source.md'), FRONTMATTER + [
 		'# Skill',
 		'',
 		'```',
@@ -177,8 +187,8 @@ test('lint: closed fence in SKILL.source.md is not an error', async () => {
 })
 
 test('lint: multiple closed fences in SKILL.source.md is not an error', async () => {
-	const skill_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.source.md'), [
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.source.md'), FRONTMATTER + [
 		'# Skill',
 		'',
 		'```',
@@ -198,7 +208,7 @@ test('lint: multiple closed fences in SKILL.source.md is not an error', async ()
 })
 
 test('lint: multiple fences with the last one unclosed — reports the last opener line', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	await writeFile(join(skill_dir, 'SKILL.source.md'), [
 		'# Skill',
 		'',
@@ -218,7 +228,7 @@ test('lint: multiple fences with the last one unclosed — reports the last open
 })
 
 test('lint: 4-backtick opener followed by 3-backtick closer is unclosed', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	await writeFile(join(skill_dir, 'SKILL.source.md'), [
 		'# Skill',
 		'',
@@ -235,8 +245,8 @@ test('lint: 4-backtick opener followed by 3-backtick closer is unclosed', async 
 })
 
 test('lint: fence opener inside a stripped HTML comment in .source.md is NOT flagged', async () => {
-	const skill_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.source.md'), [
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.source.md'), FRONTMATTER + [
 		'# Skill',
 		'',
 		'<!--',
@@ -253,7 +263,7 @@ test('lint: fence opener inside a stripped HTML comment in .source.md is NOT fla
 })
 
 test('lint: unclosed fence AFTER a stripped comment in .source.md reports the source line', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	await writeFile(join(skill_dir, 'SKILL.source.md'), [
 		'# Skill',
 		'',
@@ -275,7 +285,7 @@ test('lint: unclosed fence AFTER a stripped comment in .source.md reports the so
 })
 
 test('lint: unclosed fence in SKILL.md (plain .md) is an error — not special-cased', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	await writeFile(join(skill_dir, 'SKILL.md'), [
 		'# Skill',
 		'',
@@ -291,7 +301,7 @@ test('lint: unclosed fence in SKILL.md (plain .md) is an error — not special-c
 })
 
 test('lint: unclosed fence inside an HTML comment in a plain .md file is reported', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	await writeFile(join(skill_dir, 'SKILL.md'), '# Skill\n')
 	// .md files are NOT comment-stripped, so the fence opener is visible to the tracker.
 	await writeFile(join(skill_dir, 'extra.md'), [
@@ -307,4 +317,116 @@ test('lint: unclosed fence inside an HTML comment in a plain .md file is reporte
 
 	assert.strictEqual(result.code, 1)
 	assert.match(result.stdout, /extra\.md:3: error: unclosed fenced code block/)
+})
+
+// ** Frontmatter validation
+
+test('lint: SKILL.md with no frontmatter is an error', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), '# My Skill\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 1)
+	assert.strictEqual(result.stdout, 'SKILL.md:0: error: SKILL.md has no frontmatter\n')
+})
+
+test('lint: SKILL.source.md with no frontmatter is an error', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.source.md'), '# My Skill\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 1)
+	assert.strictEqual(result.stdout, 'SKILL.source.md:0: error: SKILL.source.md has no frontmatter\n')
+})
+
+test('lint: SKILL.md with non-mapping YAML frontmatter is an error', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), [
+		'---',
+		'- a',
+		'- b',
+		'---',
+		'# My Skill',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 1)
+	assert.strictEqual(result.stdout, 'SKILL.md:0: error: frontmatter error: frontmatter must be a YAML mapping\n')
+})
+
+test('lint: SKILL.md missing required field "name" is an error', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), [
+		'---',
+		'description: Test skill.',
+		'---',
+		'# My Skill',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 1)
+	assert.strictEqual(result.stdout, 'SKILL.md:0: error: name: required field is missing\n')
+})
+
+test('lint: SKILL.md missing required field "description" is an error', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), [
+		'---',
+		'name: my-skill',
+		'---',
+		'# My Skill',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 1)
+	assert.strictEqual(result.stdout, 'SKILL.md:0: error: description: required field is missing\n')
+})
+
+test('lint: SKILL.md with name not matching dir is an error', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), [
+		'---',
+		'name: wrong-name',
+		'description: Test skill.',
+		'---',
+		'# My Skill',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 1)
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.md:2: error: name: "wrong-name" does not match skill directory name "my-skill"\n',
+	)
+})
+
+test('lint: SKILL.md with unknown field near a known one emits a warning', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), [
+		'---',
+		'name: my-skill',
+		'description: Test skill.',
+		'licence: MIT',
+		'---',
+		'# My Skill',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.md:4: warning: unknown field "licence" (did you mean "license"?)\n',
+	)
 })

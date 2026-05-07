@@ -436,9 +436,9 @@ Lint skill files for common errors before deployment.
   - [X] =validate_frontmatter_field(key, value, line)= — per-field type/constraint checks
   - [X] =validate_frontmatter(fields, field_lines, skill_dir_name)= — orchestrate field checks,
     cross-field checks, Levenshtein typo detection (≤ 2 edits from a known portable field name)
-  - [ ] =check_frontmatter(entry, skill_dir_name)= in =src/lint.ts=; wire into =lint_manifest()=
+  - [X] =check_frontmatter(entry, skill_dir_name)= in =src/lint.ts=; wire into =lint_manifest()=
   - [ ] Document frontmatter =---= syntax in =README.org=
-  - [ ] Unit tests in =test/frontmatter.test.ts=; integration tests in =test/lint.test.ts=
+  - [X] Unit tests in =test/frontmatter.test.ts=; integration tests in =test/lint.test.ts=
 - [ ] Check URLs with =--check-urls= flag: follow redirects, accept final 2xx; treat 401/403
   as distinct warning ("may require auth"); treat 404/5xx/timeout/DNS failure as warning
 - [ ] Warn on empty sections — heading with no content (warning)
