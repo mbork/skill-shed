@@ -105,6 +105,12 @@ function check_no_unclosed_fences(manifest: Manifest): LintMessage[] {
 }
 
 // * check_frontmatter
+const FRONTMATTER_SPEC_URL = 'https://agentskills.io/specification#frontmatter'
+
+function with_spec_ref(message: string): string {
+	return `${message} (see ${FRONTMATTER_SPEC_URL})`
+}
+
 function check_frontmatter(entry: ManifestEntry, skill_dir_name: string): LintMessage[] {
 	if (typeof entry.target_content !== 'string') {
 		return []
@@ -115,7 +121,7 @@ function check_frontmatter(entry: ManifestEntry, skill_dir_name: string): LintMe
 			file: entry.source_name,
 			line: 0,
 			severity: 'error',
-			message: `${entry.source_name} has no frontmatter`,
+			message: with_spec_ref(`${entry.source_name} has no frontmatter`),
 		}]
 	}
 	if (result.kind === 'error') {
@@ -123,7 +129,7 @@ function check_frontmatter(entry: ManifestEntry, skill_dir_name: string): LintMe
 			file: entry.source_name,
 			line: 0,
 			severity: 'error',
-			message: `frontmatter error: ${result.message}`,
+			message: with_spec_ref(`frontmatter error: ${result.message}`),
 		}]
 	}
 	const issues = validate_frontmatter(result.fields, result.field_lines, skill_dir_name)
@@ -131,7 +137,7 @@ function check_frontmatter(entry: ManifestEntry, skill_dir_name: string): LintMe
 		file: entry.source_name,
 		line: issue.line,
 		severity: issue.severity,
-		message: issue.message,
+		message: with_spec_ref(issue.message),
 	}))
 }
 

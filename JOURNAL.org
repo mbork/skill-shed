@@ -5,6 +5,35 @@ A set of tools (in the form of a Node.js CLI script) for managing
 agent skills: format conversion, comment stripping, linting,
 deployment.  Currently in WiP/PoC stage.
 
+* TODO Restructure =LintMessage= to separate message from presentation
+Currently =LintMessage.message= carries both the violation text and a tacked-on
+=(see <url>)= suffix added by =with_spec_ref()= in =src/lint.ts=.  This mixes data
+with presentation: a future JSON/IDE-friendly output mode would have to strip the
+parenthetical, and tests over-specify by hard-coding the full URL inline.
+
+Two design directions to consider:
+
+- /Add a =hint?: string= field/ to =LintMessage=: optional follow-up the user can
+  act on (URL, suggested fix, related field).  Render in =format_lint_message=.
+  Generalizes beyond the spec URL — e.g. step 11 (unreferenced files) could emit
+  =hint: 'did you mean SKILL.md?'=.  Needs a one-line docstring pinning the
+  contract so the field doesn't drift into a metadata grab-bag.
+- /Add a =category= discriminator/ (e.g. ='frontmatter' | 'fences' | ...=) and
+  look the URL up from a table.  Enables consumers to filter/group by category.
+  Orthogonal to =hint=, not competing.
+
+Either change must be paired with a test-side fix — otherwise tests still assert
+on full stdout strings and break in lockstep on URL changes:
+- Assert on =LintMessage= objects via a non-CLI entry point, or
+- Define =const SPEC_HINT= once in the test file and interpolate.
+
+Open question: how should =hint= render in the =file:line: severity: message=
+compiler format?  Trailing parenthetical (current) or separate indented line?
+Some editors may parse the second variant oddly.
+
+Source: opus subagent review of [2026-05-08] staged changes (=with_spec_ref()=
+in =check_frontmatter=).
+
 * TODO Run linter against a real skill collection for integration validation
 Download a publicly available skill collection and run =skill-shed lint= on them to catch
 false positives and missing real-error detections.
@@ -423,12 +452,12 @@ Lint skill files for common errors before deployment.
 ** Blocked by
 - [[*Preserve line numbers while comment stripping]]
 
-** Steps [4/12]
+** Steps [5/12]
 - [X] Check that `SKILL.md` exists (error)
 - [X] Check for conflicting source files (two files resolving to the same target name) (error)
 - [X] Check for unclosed HTML comments (error); report file + line number
 - [X] Check for unclosed fenced code blocks (error); applies to both =.source.md= and =.md= files
-- [-] Validate frontmatter (required fields, non-empty values, known types) (error)
+- [X] Validate frontmatter (required fields, non-empty values, known types) (error)
   - [X] Add =yaml= and =leven= to =package.json=; pin exact versions
   - [X] New =src/frontmatter.ts=: =extract_frontmatter(content)= — split leading =---= block (column 0,
     optional trailing whitespace); call =yaml.parseDocument()=; return ={ fields, body, fm_start_line }=
@@ -437,7 +466,6 @@ Lint skill files for common errors before deployment.
   - [X] =validate_frontmatter(fields, field_lines, skill_dir_name)= — orchestrate field checks,
     cross-field checks, Levenshtein typo detection (≤ 2 edits from a known portable field name)
   - [X] =check_frontmatter(entry, skill_dir_name)= in =src/lint.ts=; wire into =lint_manifest()=
-  - [ ] Document frontmatter =---= syntax in =README.org=
   - [X] Unit tests in =test/frontmatter.test.ts=; integration tests in =test/lint.test.ts=
 - [ ] Check URLs with =--check-urls= flag: follow redirects, accept final 2xx; treat 401/403
   as distinct warning ("may require auth"); treat 404/5xx/timeout/DNS failure as warning

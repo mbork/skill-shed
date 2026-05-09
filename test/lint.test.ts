@@ -328,7 +328,11 @@ test('lint: SKILL.md with no frontmatter is an error', async () => {
 	const result = await run_lint(skill_dir)
 
 	assert.strictEqual(result.code, 1)
-	assert.strictEqual(result.stdout, 'SKILL.md:0: error: SKILL.md has no frontmatter\n')
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.md:0: error: SKILL.md has no frontmatter '
+		+ '(see https://agentskills.io/specification#frontmatter)\n',
+	)
 })
 
 test('lint: SKILL.source.md with no frontmatter is an error', async () => {
@@ -338,7 +342,11 @@ test('lint: SKILL.source.md with no frontmatter is an error', async () => {
 	const result = await run_lint(skill_dir)
 
 	assert.strictEqual(result.code, 1)
-	assert.strictEqual(result.stdout, 'SKILL.source.md:0: error: SKILL.source.md has no frontmatter\n')
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.source.md:0: error: SKILL.source.md has no frontmatter '
+		+ '(see https://agentskills.io/specification#frontmatter)\n',
+	)
 })
 
 test('lint: SKILL.md with non-mapping YAML frontmatter is an error', async () => {
@@ -355,7 +363,11 @@ test('lint: SKILL.md with non-mapping YAML frontmatter is an error', async () =>
 	const result = await run_lint(skill_dir)
 
 	assert.strictEqual(result.code, 1)
-	assert.strictEqual(result.stdout, 'SKILL.md:0: error: frontmatter error: frontmatter must be a YAML mapping\n')
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.md:0: error: frontmatter error: frontmatter must be a YAML mapping '
+		+ '(see https://agentskills.io/specification#frontmatter)\n',
+	)
 })
 
 test('lint: SKILL.md missing required field "name" is an error', async () => {
@@ -371,7 +383,11 @@ test('lint: SKILL.md missing required field "name" is an error', async () => {
 	const result = await run_lint(skill_dir)
 
 	assert.strictEqual(result.code, 1)
-	assert.strictEqual(result.stdout, 'SKILL.md:0: error: name: required field is missing\n')
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.md:0: error: name: required field is missing '
+		+ '(see https://agentskills.io/specification#frontmatter)\n',
+	)
 })
 
 test('lint: SKILL.md missing required field "description" is an error', async () => {
@@ -387,7 +403,11 @@ test('lint: SKILL.md missing required field "description" is an error', async ()
 	const result = await run_lint(skill_dir)
 
 	assert.strictEqual(result.code, 1)
-	assert.strictEqual(result.stdout, 'SKILL.md:0: error: description: required field is missing\n')
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.md:0: error: description: required field is missing '
+		+ '(see https://agentskills.io/specification#frontmatter)\n',
+	)
 })
 
 test('lint: SKILL.md with name not matching dir is an error', async () => {
@@ -406,7 +426,8 @@ test('lint: SKILL.md with name not matching dir is an error', async () => {
 	assert.strictEqual(result.code, 1)
 	assert.strictEqual(
 		result.stdout,
-		'SKILL.md:2: error: name: "wrong-name" does not match skill directory name "my-skill"\n',
+		'SKILL.md:2: error: name: "wrong-name" does not match skill directory name "my-skill" '
+		+ '(see https://agentskills.io/specification#frontmatter)\n',
 	)
 })
 
@@ -427,6 +448,7 @@ test('lint: SKILL.md with unknown field near a known one emits a warning', async
 	assert.strictEqual(result.code, 0)
 	assert.strictEqual(
 		result.stdout,
-		'SKILL.md:4: warning: unknown field "licence" (did you mean "license"?)\n',
+		'SKILL.md:4: warning: unknown field "licence" (did you mean "license"?) '
+		+ '(see https://agentskills.io/specification#frontmatter)\n',
 	)
 })
