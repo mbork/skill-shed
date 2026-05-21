@@ -5,6 +5,13 @@ A set of tools (in the form of a Node.js CLI script) for managing
 agent skills: format conversion, comment stripping, linting,
 deployment.  Currently in WiP/PoC stage.
 
+* INPROGRESS Bump up code coverage in tests
+:LOGBOOK:
+- State "INPROGRESS" from "TODO"       [2026-05-21 Thu 19:06]
+:END:
+Use the =c8= coverage tooling to find under-tested modules and add tests to raise
+coverage on the weakest spots first.
+
 * TODO Test coverage tooling via =c8=
 Add =coverage= and =coverage-report= npm scripts using =c8=, with =patch-package=
 handling a Node 26 + =yargs@17.7.2= incompatibility.

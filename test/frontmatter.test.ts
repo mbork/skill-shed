@@ -192,6 +192,55 @@ test('extract_frontmatter: field_lines only covers top-level keys', () => {
 	assert.ok(!result.field_lines.has('author'))
 })
 
+test('extract_frontmatter: integer key in frontmatter is skipped in field_lines', () => {
+	const result = extract_frontmatter([
+		'---',
+		'42: foo',
+		'name: my-skill',
+		'---',
+		'',
+	].join('\n'))
+	assert.equal(result.kind, 'ok')
+	if (result.kind !== 'ok') {
+		return
+	}
+	assert.ok(result.field_lines.has('name'))
+	assert.equal(result.field_lines.size, 1)
+})
+
+test('extract_frontmatter: sequence key in frontmatter is skipped in field_lines', () => {
+	const result = extract_frontmatter([
+		'---',
+		'? [a, b]',
+		': foo',
+		'name: my-skill',
+		'---',
+		'',
+	].join('\n'))
+	assert.equal(result.kind, 'ok')
+	if (result.kind !== 'ok') {
+		return
+	}
+	assert.ok(result.field_lines.has('name'))
+	assert.equal(result.field_lines.size, 1)
+})
+
+test('extract_frontmatter: null key in frontmatter is skipped in field_lines', () => {
+	const result = extract_frontmatter([
+		'---',
+		'~: foo',
+		'name: my-skill',
+		'---',
+		'',
+	].join('\n'))
+	assert.equal(result.kind, 'ok')
+	if (result.kind !== 'ok') {
+		return
+	}
+	assert.ok(result.field_lines.has('name'))
+	assert.equal(result.field_lines.size, 1)
+})
+
 // * validate_frontmatter_field
 // ** Message constants
 const NAME_EXPECTED_STRING = 'name: expected a string'
