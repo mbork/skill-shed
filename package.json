@@ -36,8 +36,8 @@
     "lint": "eslint .",
     "test": "node --test",
     "typecheck": "tsgo --noEmit",
-    "coverage": "npx c8 node --test",
-    "coverage-report": "npx c8 --reporter=html node --test && xdg-open coverage/index.html"
+    "coverage": "npx c8 node --test --test-reporter=dot",
+    "coverage-report": "npx c8 --reporter=html node --test --test-reporter=dot && xdg-open coverage/index.html"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
