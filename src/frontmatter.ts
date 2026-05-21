@@ -14,14 +14,17 @@ import {closestMatch} from 'leven'
 // kind: 'none'  — file does not start with ---; no frontmatter present
 // kind: 'error' — frontmatter block found but malformed (unclosed or invalid YAML)
 // kind: 'ok'    — frontmatter parsed successfully
+// body_start_line: 0-based line index where the body begins (after the closing delimiter).
+// For 'none' it's 0; for 'error' with unclosed delimiter it's lines.length (no body).
 export type FrontmatterResult
-	= | {kind: 'none'}
-		| {kind: 'error', message: string}
+	= | {kind: 'none', body_start_line: number}
+		| {kind: 'error', message: string, body_start_line: number}
 		| {
 			kind: 'ok'
 			fields: Record<string, unknown>
 			body: string
 			field_lines: Map<string, number> // key → 1-based file line number
+			body_start_line: number
 		}
 
 export interface FieldIssue {line: number, severity: 'error' | 'warning', message: string}
@@ -31,7 +34,7 @@ export function extract_frontmatter(content: string): FrontmatterResult {
 	const lines = content.split('\n')
 
 	if (!lines[0]?.match(/^---\s*$/)) {
-		return {kind: 'none'}
+		return {kind: 'none', body_start_line: 0}
 	}
 
 	let close_line = -1
@@ -43,20 +46,29 @@ export function extract_frontmatter(content: string): FrontmatterResult {
 	}
 
 	if (close_line === -1) {
-		return {kind: 'error', message: 'unclosed frontmatter (no closing --- or ...)'}
+		return {
+			kind: 'error',
+			message: 'unclosed frontmatter (no closing --- or ...)',
+			body_start_line: lines.length,
+		}
 	}
 
+	const body_start_line = close_line + 1
 	const yaml_content = lines.slice(1, close_line).join('\n')
 	const body = lines.slice(close_line + 1).join('\n')
 	const doc = parseDocument(yaml_content)
 
 	if (doc.errors.length > 0) {
 		const messages = doc.errors.map(e => e.message).join('; ')
-		return {kind: 'error', message: `invalid YAML in frontmatter: ${messages}`}
+		return {
+			kind: 'error',
+			message: `invalid YAML in frontmatter: ${messages}`,
+			body_start_line,
+		}
 	}
 
 	if (doc.contents !== null && !isMap(doc.contents)) {
-		return {kind: 'error', message: 'frontmatter must be a YAML mapping'}
+		return {kind: 'error', message: 'frontmatter must be a YAML mapping', body_start_line}
 	}
 
 	const fields = (doc.toJSON() ?? {}) as Record<string, unknown>
@@ -76,7 +88,7 @@ export function extract_frontmatter(content: string): FrontmatterResult {
 		}
 	}
 
-	return {kind: 'ok', fields, body, field_lines}
+	return {kind: 'ok', fields, body, field_lines, body_start_line}
 }
 
 // * validate_frontmatter_field

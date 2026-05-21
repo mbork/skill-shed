@@ -8,15 +8,15 @@ import {extract_frontmatter, validate_frontmatter_field, validate_frontmatter} f
 // ** kind: 'none'
 
 test('extract_frontmatter: empty file → none', () => {
-	assert.deepStrictEqual(extract_frontmatter(''), {kind: 'none'})
+	assert.deepStrictEqual(extract_frontmatter(''), {kind: 'none', body_start_line: 0})
 })
 
 test('extract_frontmatter: no frontmatter → none', () => {
-	assert.deepStrictEqual(extract_frontmatter('# Heading\n\nBody text.\n'), {kind: 'none'})
+	assert.deepStrictEqual(extract_frontmatter('# Heading\n\nBody text.\n'), {kind: 'none', body_start_line: 0})
 })
 
 test('extract_frontmatter: --- not at column 0 → none', () => {
-	assert.deepStrictEqual(extract_frontmatter(' ---\nname: aqq\n---\n'), {kind: 'none'})
+	assert.deepStrictEqual(extract_frontmatter(' ---\nname: aqq\n---\n'), {kind: 'none', body_start_line: 0})
 })
 
 // ** kind: 'error'

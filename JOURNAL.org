@@ -452,7 +452,7 @@ Lint skill files for common errors before deployment.
 ** Blocked by
 - [[*Preserve line numbers while comment stripping]]
 
-** Steps [5/12]
+** Steps [6/12]
 - [X] Check that `SKILL.md` exists (error)
 - [X] Check for conflicting source files (two files resolving to the same target name) (error)
 - [X] Check for unclosed HTML comments (error); report file + line number
@@ -469,7 +469,7 @@ Lint skill files for common errors before deployment.
   - [X] Unit tests in =test/frontmatter.test.ts=; integration tests in =test/lint.test.ts=
 - [ ] Check URLs with =--check-urls= flag: follow redirects, accept final 2xx; treat 401/403
   as distinct warning ("may require auth"); treat 404/5xx/timeout/DNS failure as warning
-- [ ] Warn on empty sections — heading with no content (warning)
+- [X] Warn on empty sections — heading with no content (warning)
 - [ ] Warn on duplicate headings (warning)
 - [ ] Error if =description= exceeds 1024 characters (agentskills.io spec hard limit, see
   https://agentskills.io/specification#frontmatter)

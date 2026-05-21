@@ -31,7 +31,7 @@ test('lint: missing SKILL.md and SKILL.source.md is an error', async () => {
 
 test('lint: SKILL.md present — no errors', async () => {
 	const skill_dir = await make_skill_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# My Skill\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# My Skill\n\nBody.\n')
 
 	const result = await run_lint(skill_dir)
 
@@ -41,7 +41,7 @@ test('lint: SKILL.md present — no errors', async () => {
 
 test('lint: SKILL.source.md present — no errors', async () => {
 	const skill_dir = await make_skill_dir()
-	await writeFile(join(skill_dir, 'SKILL.source.md'), FRONTMATTER + '# My Skill\n')
+	await writeFile(join(skill_dir, 'SKILL.source.md'), FRONTMATTER + '# My Skill\n\nBody.\n')
 
 	const result = await run_lint(skill_dir)
 
@@ -246,6 +246,8 @@ test('lint: 4-backtick opener followed by 3-backtick closer is unclosed', async 
 
 test('lint: fence opener inside a stripped HTML comment in .source.md is NOT flagged', async () => {
 	const skill_dir = await make_skill_dir()
+	// "After the comment." is required so that `# Skill` is not flagged as an empty section
+	// post-stripping.  The test's primary subject is the fence-in-comment behavior.
 	await writeFile(join(skill_dir, 'SKILL.source.md'), FRONTMATTER + [
 		'# Skill',
 		'',
@@ -253,6 +255,8 @@ test('lint: fence opener inside a stripped HTML comment in .source.md is NOT fla
 		'```',
 		'body',
 		'-->',
+		'',
+		'After the comment.',
 		'',
 	].join('\n'))
 
@@ -323,7 +327,7 @@ test('lint: unclosed fence inside an HTML comment in a plain .md file is reporte
 
 test('lint: SKILL.md with no frontmatter is an error', async () => {
 	const skill_dir = await make_skill_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), '# My Skill\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), '# My Skill\n\nBody.\n')
 
 	const result = await run_lint(skill_dir)
 
@@ -337,7 +341,7 @@ test('lint: SKILL.md with no frontmatter is an error', async () => {
 
 test('lint: SKILL.source.md with no frontmatter is an error', async () => {
 	const skill_dir = await make_skill_dir()
-	await writeFile(join(skill_dir, 'SKILL.source.md'), '# My Skill\n')
+	await writeFile(join(skill_dir, 'SKILL.source.md'), '# My Skill\n\nBody.\n')
 
 	const result = await run_lint(skill_dir)
 
@@ -357,6 +361,8 @@ test('lint: SKILL.md with non-mapping YAML frontmatter is an error', async () =>
 		'- b',
 		'---',
 		'# My Skill',
+		'',
+		'Body.',
 		'',
 	].join('\n'))
 
@@ -378,6 +384,8 @@ test('lint: SKILL.md missing required field "name" is an error', async () => {
 		'---',
 		'# My Skill',
 		'',
+		'Body.',
+		'',
 	].join('\n'))
 
 	const result = await run_lint(skill_dir)
@@ -397,6 +405,8 @@ test('lint: SKILL.md missing required field "description" is an error', async ()
 		'name: my-skill',
 		'---',
 		'# My Skill',
+		'',
+		'Body.',
 		'',
 	].join('\n'))
 
@@ -418,6 +428,8 @@ test('lint: SKILL.md with name not matching dir is an error', async () => {
 		'description: Test skill.',
 		'---',
 		'# My Skill',
+		'',
+		'Body.',
 		'',
 	].join('\n'))
 
@@ -441,6 +453,8 @@ test('lint: SKILL.md with unknown field near a known one emits a warning', async
 		'---',
 		'# My Skill',
 		'',
+		'Body.',
+		'',
 	].join('\n'))
 
 	const result = await run_lint(skill_dir)
@@ -451,4 +465,333 @@ test('lint: SKILL.md with unknown field near a known one emits a warning', async
 		'SKILL.md:4: warning: unknown field "licence" (did you mean "license"?) '
 		+ '(see https://agentskills.io/specification#frontmatter)\n',
 	)
+})
+
+// ** Empty sections
+
+test('lint: `#`-prefixed YAML comments in frontmatter do not trigger empty-section warnings',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.md'), [
+			'---',
+			'# first YAML comment',
+			'# second YAML comment',
+			'name: my-skill',
+			'description: Test skill.',
+			'---',
+			'',
+			'# Title',
+			'',
+			'Body.',
+			'',
+		].join('\n'))
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(result.stdout.trim(), '')
+	})
+
+test('lint: heading with no body is a warning', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Title\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, 'SKILL.md:6: warning: empty section "Title"\n')
+})
+
+test('lint: heading followed by blank lines only is a warning', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Title\n\n\n\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, 'SKILL.md:6: warning: empty section "Title"\n')
+})
+
+test('lint: heading followed by sibling heading is a warning on the first only', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'## A',
+		'## B',
+		'body.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, 'SKILL.md:6: warning: empty section "A"\n')
+})
+
+test('lint: parent heading whose only content is a subsection is NOT flagged', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# A',
+		'## B',
+		'body.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), '')
+})
+
+test('lint: section that contains a code fence is NOT flagged', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Title',
+		'```',
+		'x',
+		'```',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), '')
+})
+
+// Two `#` lines inside the fence: if fence-awareness regressed, the first would be classified
+// as a heading and the second as a same-level sibling closing it — a false-positive warning.
+test('lint: consecutive `#` lines inside a fenced code block do not count as headings',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+			'# Real',
+			'',
+			'```',
+			'# fake1',
+			'# fake2',
+			'```',
+			'',
+			'body.',
+			'',
+		].join('\n'))
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(result.stdout.trim(), '')
+	})
+
+test('lint: empty-section warning in .source.md reports the source line via line_map',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.source.md'), [
+			'---',
+			'name: my-skill',
+			'description: Test skill.',
+			'---',
+			'',
+			'<!-- some comment -->',
+			'',
+			'# Title',
+			'',
+		].join('\n'))
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(result.stdout, 'SKILL.source.md:8: warning: empty section "Title"\n')
+	})
+
+test('lint: section with only an HTML comment (stripped from .source.md) is flagged empty',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.source.md'), [
+			'---',
+			'name: my-skill',
+			'description: Test skill.',
+			'---',
+			'',
+			'# Title',
+			'<!-- a comment, stripped -->',
+			'',
+		].join('\n'))
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(result.stdout, 'SKILL.source.md:6: warning: empty section "Title"\n')
+	})
+
+test('lint: 4-space-indented `# Title` does not count as a heading', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'    # Title',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), '')
+})
+
+test('lint: 7-hash line does not count as a heading', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'####### Not a heading',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), '')
+})
+
+test('lint: trailing-`#` closing sequence stripped from reported title', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Title ###\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, 'SKILL.md:6: warning: empty section "Title"\n')
+})
+
+test('lint: empty-titled heading produces `empty section ""`', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# \n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, 'SKILL.md:6: warning: empty section ""\n')
+})
+
+test('lint: multi-word title preserved in the warning text', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# A great section\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, 'SKILL.md:6: warning: empty section "A great section"\n')
+})
+
+test('lint: multiple empty sections in one file produce multiple warnings', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# A',
+		'# B',
+		'# C',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.md:6: warning: empty section "A"\n'
+		+ 'SKILL.md:7: warning: empty section "B"\n'
+		+ 'SKILL.md:8: warning: empty section "C"\n',
+	)
+})
+
+test('lint: empty section in a non-SKILL.md file is flagged', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody.\n')
+	await writeFile(join(skill_dir, 'reference.md'), '# Empty section\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(
+		result.stdout,
+		'reference.md:1: warning: empty section "Empty section"\n',
+	)
+})
+
+test('lint: unclosed frontmatter does not produce empty-section warnings', async () => {
+	const skill_dir = await make_skill_dir()
+	// No closing `---`: extract_frontmatter returns kind:'error' with body_start_line at EOF,
+	// so check_no_empty_sections sees no body and emits no warning.  Only the frontmatter
+	// error fires.
+	await writeFile(join(skill_dir, 'SKILL.md'), '---\n# heading\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 1)
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.md:0: error: frontmatter error: unclosed frontmatter (no closing --- or ...) '
+		+ '(see https://agentskills.io/specification#frontmatter)\n',
+	)
+})
+
+test('lint: empty section after invalid-YAML frontmatter is still flagged', async () => {
+	const skill_dir = await make_skill_dir()
+	// Closed `---` delimiters but invalid YAML inside: body_start_line points just past the
+	// closing ---, so the empty-section check still runs on the body and fires alongside
+	// the frontmatter error.
+	await writeFile(join(skill_dir, 'SKILL.md'), [
+		'---',
+		': bad: yaml:',
+		'---',
+		'',
+		'# Empty',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 1)
+	assert.strictEqual(result.stdout, [
+		'SKILL.md:5: warning: empty section "Empty"',
+		'SKILL.md:0: error: frontmatter error: invalid YAML in frontmatter: '
+		+ 'Nested mappings are not allowed in compact mappings at line 1, column 3:',
+		'',
+		': bad: yaml:',
+		'  ^',
+		'; Nested mappings are not allowed in compact mappings at line 1, column 8:',
+		'',
+		': bad: yaml:',
+		'       ^',
+		' (see https://agentskills.io/specification#frontmatter)',
+		'',
+	].join('\n'))
+})
+
+test('lint: `#hashtag` in body does not count as a heading', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Section',
+		'#hashtag is just text',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), '')
+})
+
+test('lint: consecutive `#` lines inside a tilde fence do not count as headings', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Real',
+		'',
+		'~~~',
+		'# fake1',
+		'# fake2',
+		'~~~',
+		'',
+		'body.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), '')
 })

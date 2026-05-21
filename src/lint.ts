@@ -13,9 +13,15 @@ import {
 	type Manifest,
 	type ManifestEntry,
 } from './manifest.ts'
-import {make_fence_tracker} from './md-parse.ts'
+import {classify_lines, is_section_empty, make_fence_tracker} from './md-parse.ts'
 import {extract_frontmatter, validate_frontmatter} from './frontmatter.ts'
 import type {ManifestSource} from './deploy.ts'
+
+// * Conventions
+// Lint checks operate on `target_content` by default — i.e. what gets deployed (after any
+// .source.md comment stripping), not the on-disk source.  A section that becomes empty only
+// after stripping is still flagged; a fence opener that only appears inside a stripped
+// comment is not.
 
 // * Types
 
@@ -104,6 +110,43 @@ function check_no_unclosed_fences(manifest: Manifest): LintMessage[] {
 	return messages
 }
 
+// * check_no_empty_sections
+// Severity: warning.  Runs over target content, so a section consisting only of comments
+// stripped from .source.md is reported empty (which is correct: that's what gets deployed).
+// Skips the frontmatter region (a `#`-prefixed YAML comment at column 0 inside frontmatter
+// would otherwise be misclassified as an H1 heading).
+function check_no_empty_sections(manifest: Manifest): LintMessage[] {
+	const messages: LintMessage[] = []
+	for (const entry of manifest) {
+		if (typeof entry.target_content !== 'string') {
+			continue
+		}
+		const frontmatter = extract_frontmatter(entry.target_content)
+		const body_start = frontmatter.body_start_line
+		const lines = entry.target_content.split('\n')
+		const body = lines.slice(body_start).join('\n')
+		const kinds = classify_lines(body)
+		for (let i = 0; i < kinds.length; i++) {
+			const k = kinds[i]
+			if (k.kind !== 'heading') {
+				continue
+			}
+			if (!is_section_empty(kinds, i, k.level)) {
+				continue
+			}
+			const target_line = body_start + i
+			const source_line = entry.line_map?.[target_line] ?? target_line
+			messages.push({
+				file: entry.source_name,
+				line: source_line + 1,
+				severity: 'warning',
+				message: `empty section "${k.text}"`,
+			})
+		}
+	}
+	return messages
+}
+
 // * check_frontmatter
 const FRONTMATTER_SPEC_URL = 'https://agentskills.io/specification#frontmatter'
 
@@ -150,6 +193,7 @@ function lint_manifest(skill_dir: string, manifest: Manifest): LintMessage[] {
 		...check_no_conflicts(skill_dir, manifest),
 		...check_no_unclosed_comments(manifest),
 		...check_no_unclosed_fences(manifest),
+		...check_no_empty_sections(manifest),
 		...(skill_md_entry != null ? check_frontmatter(skill_md_entry, skill_dir_name) : []),
 	]
 }
