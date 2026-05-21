@@ -32,17 +32,22 @@
     "skill-shed": "src/skill-shed.ts"
   },
   "scripts": {
+    "postinstall": "patch-package",
     "lint": "eslint .",
     "test": "node --test",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsgo --noEmit",
+    "coverage": "npx c8 node --test",
+    "coverage-report": "npx c8 --reporter=html node --test && xdg-open coverage/index.html"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@stylistic/eslint-plugin": "^5.10.0",
     "@types/node": "24.12.0",
     "@typescript/native-preview": "7.0.0-dev.20260324.1",
+    "c8": "^11.0.0",
     "eslint": "10.1.0",
     "jiti": "2.6.1",
+    "patch-package": "^8.0.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.57.2"
   },
