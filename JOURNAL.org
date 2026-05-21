@@ -5,6 +5,62 @@ A set of tools (in the form of a Node.js CLI script) for managing
 agent skills: format conversion, comment stripping, linting,
 deployment.  Currently in WiP/PoC stage.
 
+* TODO Test coverage tooling via =c8=
+Add =coverage= and =coverage-report= npm scripts using =c8=, with =patch-package=
+handling a Node 26 + =yargs@17.7.2= incompatibility.
+
+** Decisions
+*** [2026-05-21] – Use =patch-package= over a hand-rolled =postinstall= script
+**** Reason
+The fix requires modifying =node_modules/yargs/package.json= — a state that does
+not survive =npm ci=.  A hand-rolled =postinstall= script (Node ESM file editing
+the JSON in place) works but silently does nothing if upstream yargs ever changes
+shape.  =patch-package= applies a checked-in diff and fails loudly when the target
+file drifts, which is the desired behavior for a node_modules workaround.
+**** Alternatives considered
+- Hand-rolled script under =scripts/=: less robust, no drift detection.
+- =npm overrides= to force yargs 16 (pure CJS): c8 pins =yargs: ^17.7.2=, so the
+  override would violate the range and could break c8.
+- Switch to Node's built-in =--experimental-test-coverage=: works for terminal
+  output, but lacks an HTML reporter equivalent to =c8 --reporter=html=.
+
+*** [2026-05-21] – Patch yargs's =package.json= (remove =type: module=) rather than the =yargs/yargs= file
+**** Reason
+On Node 26, =require('yargs/yargs')= from c8's CJS code triggers ESM loading of
+=node_modules/yargs/yargs= (extensionless file) because the yargs package
+declares =type: module=.  The file's content is CJS (=require=, =module.exports=)
+— so Node throws =ReferenceError: require is not defined in ES module scope=.
+Rewriting the file to ESM was attempted but breaks c8 differently: =require(esm)=
+returns the namespace object =\{ default: Yargs \}=, not the function, so
+=Yargs([])= fails with =TypeError: Yargs is not a function=.  Removing =type:
+module= from yargs's =package.json= is the minimal change — Node then treats
+extensionless files as CJS by default, which matches their actual syntax.
+The =.mjs= files in yargs keep working because their extension is explicit.
+**** Alternatives considered
+- Rewrite =yargs/yargs= to use =import=/=export default=: breaks the CJS consumer
+  (c8) because of the =require(esm)= namespace-wrapping behavior.
+- Rename =yargs/yargs= to =yargs.cjs= and update exports: requires patching two
+  files instead of one.
+
+*** [2026-05-21] – Pass =--exclude '^$'= when creating the patch
+**** Reason
+=patch-package=' default =--exclude= regexp is =package\.json$=, so by default
+changes to =package.json= are silently dropped from generated patches.  Since
+our entire fix lives in =yargs/package.json=, the exclusion has to be overridden
+at creation time.  This flag is only needed when /generating/ the patch; applying
+it at =postinstall= time works without any flag.
+
+** Session log
+*** [2026-05-21]
+- Completed: =c8= and =patch-package= added as devDependencies; =coverage= and
+  =coverage-report= scripts in =package.json=; =patches/yargs+17.7.2.patch=
+  checked in (removes =type: module= from =node_modules/yargs/package.json=);
+  =postinstall: patch-package= wired up; =coverage/= gitignored; committed.
+- In progress: NONE
+- Next: N/A — feature complete; mark as DONE.
+- Blockers: NONE
+- Decisions: all logged above.
+
 * TODO Restructure =LintMessage= to separate message from presentation
 Currently =LintMessage.message= carries both the violation text and a tacked-on
 =(see <url>)= suffix added by =with_spec_ref()= in =src/lint.ts=.  This mixes data
