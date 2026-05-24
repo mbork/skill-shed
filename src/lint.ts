@@ -140,6 +140,33 @@ function check_no_empty_sections(manifest: Manifest): LintMessage[] {
 	return messages
 }
 
+// * check_no_empty_files
+// Severity: warning.  Flags any non-SKILL.md entry whose target_content is empty (a string
+// that trims to empty, or a zero-length Buffer).  SKILL.md is handled by `check_empty_body`,
+// which reports a per-line location.  No text/binary distinction: a 0-byte file is content-
+// free regardless of extension, and no legitimate skill ships an empty image/font/asset.
+function check_no_empty_files(manifest: Manifest): LintMessage[] {
+	const messages: LintMessage[] = []
+	for (const entry of manifest) {
+		if (entry.target_name === 'SKILL.md') {
+			continue
+		}
+		const is_empty = typeof entry.target_content === 'string'
+			? entry.target_content.trim() === ''
+			: entry.target_content.length === 0
+		if (!is_empty) {
+			continue
+		}
+		messages.push({
+			file: entry.source_name,
+			line: 0,
+			severity: 'warning',
+			message: 'file is empty',
+		})
+	}
+	return messages
+}
+
 // * check_empty_body
 // Severity: warning.  Body is everything after `body_start_line` — the same region
 // `check_no_empty_sections` inspects.  Runs regardless of frontmatter health: a file with
@@ -210,6 +237,7 @@ function lint_manifest(skill_dir: string, manifest: Manifest): LintMessage[] {
 		...check_no_unclosed_comments(manifest),
 		...check_no_unclosed_fences(manifest),
 		...check_no_empty_sections(manifest),
+		...check_no_empty_files(manifest),
 		...(skill_md_entry != null ? check_frontmatter(skill_md_entry, skill_dir_name) : []),
 		...(skill_md_entry != null ? check_empty_body(skill_md_entry) : []),
 	]

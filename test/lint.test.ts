@@ -865,6 +865,63 @@ test('lint: invalid YAML frontmatter with an empty body emits both the error and
 		assert.match(result.stdout, /body is empty/)
 	})
 
+// ** Empty non-SKILL.md files
+
+test('lint: empty non-SKILL.md file is a warning', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody.\n')
+	await writeFile(join(skill_dir, 'reference.md'), '')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, 'reference.md:0: warning: file is empty\n')
+})
+
+test('lint: whitespace-only non-SKILL.md file is a warning', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody.\n')
+	await writeFile(join(skill_dir, 'reference.md'), '   \n\t\n\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, 'reference.md:0: warning: file is empty\n')
+})
+
+test('lint: .source.md whose target is empty after stripping is a warning', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody.\n')
+	await writeFile(join(skill_dir, 'reference.source.md'), '<!-- only a comment -->\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, 'reference.source.md:0: warning: file is empty\n')
+})
+
+test('lint: empty binary (non-.md) file is a warning', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody.\n')
+	await writeFile(join(skill_dir, 'asset.bin'), Buffer.alloc(0))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, 'asset.bin:0: warning: file is empty\n')
+})
+
+test('lint: empty SKILL.md reports body-empty, not file-empty', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), '')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 1)
+	assert.doesNotMatch(result.stdout, /file is empty/)
+	assert.match(result.stdout, /body is empty/)
+})
+
 // ** Manifest source errors
 
 test('lint: non-ENOENT error reading .env is reported via catch block', async () => {
