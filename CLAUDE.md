@@ -46,8 +46,8 @@ npm run lint
 |------|----------|
 | `--clean` (default) | Deploy last Git commit; abort if skill dir has any uncommitted changes |
 | `--workdir` | Deploy working directory; exclude Git-ignored files |
-| `--staged` | Deploy Git staging area (not yet implemented) |
-| `--ref <ref>` | Deploy a specific Git ref (not yet implemented) |
+| `--staged` | Deploy Git staging area |
+| `--ref <ref>` | Deploy a specific Git ref |
 
 ## Planned / in-progress features (see JOURNAL.org)
 

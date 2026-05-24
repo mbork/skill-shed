@@ -1,21 +1,14 @@
 // * Imports
-import {readFile} from 'node:fs/promises'
-import {basename, resolve} from 'node:path'
-import {parseEnv} from 'node:util'
-import {ensure_git_or_abort} from './utils.ts'
+import {basename} from 'node:path'
 import {
-	build_manifest_from_command,
-	build_manifest_from_git_clean,
-	build_manifest_from_git_workdir,
-	build_manifest_from_git_staged,
-	build_manifest_from_git_ref,
+	build_manifest,
 	find_target_conflicts,
 	type Manifest,
 	type ManifestEntry,
+	type ManifestSource,
 } from './manifest.ts'
 import {classify_lines, is_section_empty, make_fence_tracker} from './md-parse.ts'
 import {extract_frontmatter, validate_frontmatter} from './frontmatter.ts'
-import type {ManifestSource} from './deploy.ts'
 
 // * Conventions
 // Lint checks operate on `target_content` by default — i.e. what gets deployed (after any
@@ -155,10 +148,9 @@ function with_spec_ref(message: string): string {
 }
 
 function check_frontmatter(entry: ManifestEntry, skill_dir_name: string): LintMessage[] {
-	if (typeof entry.target_content !== 'string') {
-		return []
-	}
-	const result = extract_frontmatter(entry.target_content)
+	// Caller filters for SKILL.md, whose target_content is always a string (manifest.ts
+	// reads .md files as utf8).
+	const result = extract_frontmatter(entry.target_content as string)
 	if (result.kind === 'none') {
 		return [{
 			file: entry.source_name,
@@ -198,45 +190,11 @@ function lint_manifest(skill_dir: string, manifest: Manifest): LintMessage[] {
 	]
 }
 
-// * read_manifest_command
-async function read_manifest_command(skill_dir: string): Promise<string | undefined> {
-	const env_path = resolve(skill_dir, '.env')
-	try {
-		const content = await readFile(env_path, 'utf8')
-		return parseEnv(content).MANIFEST_COMMAND
-	} catch (e: unknown) {
-		if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
-			return undefined
-		}
-		throw e
-	}
-}
-
-// * build_lint_manifest
-async function build_lint_manifest(skill_dir: string, source: ManifestSource): Promise<Manifest> {
-	const manifest_command = await read_manifest_command(skill_dir)
-	if (manifest_command) {
-		return build_manifest_from_command(skill_dir, manifest_command)
-	}
-	await ensure_git_or_abort(skill_dir)
-	if (source.kind === 'clean') {
-		return build_manifest_from_git_clean(skill_dir)
-	} else if (source.kind === 'workdir') {
-		return build_manifest_from_git_workdir(skill_dir)
-	} else if (source.kind === 'staged') {
-		return build_manifest_from_git_staged(skill_dir)
-	} else if (source.kind === 'ref') {
-		return build_manifest_from_git_ref(skill_dir, source.ref)
-	} else {
-		return build_manifest_from_command(skill_dir, source.command)
-	}
-}
-
 // * lint
 export async function lint(skill_dir: string, source: ManifestSource): Promise<void> {
-	let manifest
+	let manifest: Manifest
 	try {
-		manifest = await build_lint_manifest(skill_dir, source)
+		manifest = await build_manifest(skill_dir, source)
 	} catch (e: unknown) {
 		console.error(`Error: ${(e as Error).message}`)
 		process.exit(1)

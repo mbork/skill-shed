@@ -5,14 +5,34 @@ A set of tools (in the form of a Node.js CLI script) for managing
 agent skills: format conversion, comment stripping, linting,
 deployment.  Currently in WiP/PoC stage.
 
-* INPROGRESS Bump up code coverage in tests
+* DONE Bump up code coverage in tests
 :LOGBOOK:
+- State "DONE"       from "INPROGRESS" [2026-05-24 Sun 09:14]
 - State "INPROGRESS" from "TODO"       [2026-05-21 Thu 19:06]
 :END:
 Use the =c8= coverage tooling to find under-tested modules and add tests to raise
 coverage on the weakest spots first.
 
-* TODO Test coverage tooling via =c8=
+** Steps [13/13]
+- [X] Configure =c8= watermarks: red <80%, yellow 80–99%, green 100%
+- [X] Codify "100% coverage, no =c8 ignore=" policy in =test/CLAUDE.md=
+- [X] =src/frontmatter.ts= to 100%
+- [X] =src/deploy.ts= to 100%
+- [X] =src/global-config.ts= to 100%
+- [X] =src/help.ts= to 100%
+- [X] =src/lint.ts= to 100%
+- [X] =src/manifest.ts= to 100%
+- [X] =src/sidecar.ts= to 100%
+- [X] =src/skill-shed.ts= to 100%
+- [X] =src/utils.ts= to 100%
+- [X] Drop root-skip guards from chmod-based tests; tighten error-object rejections
+- [X] Discriminate source-mode tests via distinct-layer fixture (=setup_skill_dir_with_distinct_layers=)
+
+* DONE Test coverage tooling via =c8=
+:LOGBOOK:
+- State "DONE"       from "INPROGRESS" [2026-05-24 Sun 09:14]
+- State "INPROGRESS" from "TODO"       [2026-05-24 Sun 09:14]
+:END:
 Add =coverage= and =coverage-report= npm scripts using =c8=, with =patch-package=
 handling a Node 26 + =yargs@17.7.2= incompatibility.
 

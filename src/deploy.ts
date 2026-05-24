@@ -3,15 +3,12 @@ import {mkdir, readFile, stat, unlink, writeFile} from 'node:fs/promises'
 import {dirname, resolve} from 'node:path'
 import {parseEnv} from 'node:util'
 import {
-	build_manifest_from_command,
-	build_manifest_from_git_clean,
-	build_manifest_from_git_workdir,
-	build_manifest_from_git_staged,
-	build_manifest_from_git_ref,
+	build_manifest,
 	validate_manifest,
 	type Manifest,
+	type ManifestSource,
 } from './manifest.ts'
-import {ensure_git_or_abort, expand_tilde} from './utils.ts'
+import {expand_tilde} from './utils.ts'
 
 import {
 	collect_overwrite_violations,
@@ -21,14 +18,6 @@ import {
 	read_sidecar,
 	write_sidecar,
 } from './sidecar.ts'
-
-// * ManifestSource
-export type ManifestSource
-	= | {kind: 'clean'}
-		| {kind: 'workdir'}
-		| {kind: 'staged'}
-		| {kind: 'ref', ref: string}
-		| {kind: 'command', command: string}
 
 // * Sentinel
 const SENTINEL_FILENAME = '.skill-shed-deploy-in-progress'
@@ -56,11 +45,10 @@ async function has_sentinel(target_dir: string): Promise<boolean> {
 	}
 }
 
-// * read_skill_env
-async function read_skill_env(skill_dir: string): Promise<{
-	absolute_target_dir: string
-	manifest_command: string | undefined
-}> {
+// * read_target_dir
+// Resolves TARGET_DIRECTORY from skill_dir/.env to an absolute path.  Exits 1 if .env is
+// missing/unreadable or TARGET_DIRECTORY is not set.
+async function read_target_dir(skill_dir: string): Promise<string> {
 	const env_path = resolve(skill_dir, '.env')
 
 	let env_content: string
@@ -75,52 +63,25 @@ async function read_skill_env(skill_dir: string): Promise<{
 		}
 		process.exit(1)
 	}
-	const env = parseEnv(env_content)
-
-	const target_dir = expand_tilde(env.TARGET_DIRECTORY ?? '')
+	const target_dir = expand_tilde(parseEnv(env_content).TARGET_DIRECTORY ?? '')
 	if (!target_dir) {
 		console.error('Error: TARGET_DIRECTORY not set in .env')
 		process.exit(1)
 	}
-
-	return {
-		absolute_target_dir: resolve(skill_dir, target_dir),
-		manifest_command: env.MANIFEST_COMMAND,
-	}
+	return resolve(skill_dir, target_dir)
 }
 
 // * deploy
 export async function deploy(
 	skill_dir: string,
 	is_force = false,
-	command_line_source: ManifestSource = {kind: 'clean'},
+	source: ManifestSource = {kind: 'clean'},
 ): Promise<void> {
-	const {absolute_target_dir, manifest_command} = await read_skill_env(skill_dir)
+	const absolute_target_dir = await read_target_dir(skill_dir)
 
-	const manifest_source: ManifestSource = manifest_command
-		? {kind: 'command', command: manifest_command}
-		: command_line_source
-
-	let manifest: Manifest = []
+	let manifest: Manifest
 	try {
-		if (manifest_source.kind === 'command') {
-			manifest = await build_manifest_from_command(skill_dir, manifest_source.command)
-		} else {
-			await ensure_git_or_abort(skill_dir)
-			if (manifest_source.kind === 'workdir') {
-				manifest = await build_manifest_from_git_workdir(skill_dir)
-			} else if (manifest_source.kind === 'staged') {
-				manifest = await build_manifest_from_git_staged(skill_dir)
-			} else if (manifest_source.kind === 'ref') {
-				manifest = await build_manifest_from_git_ref(skill_dir, manifest_source.ref)
-			} else if (manifest_source.kind === 'clean') {
-				manifest = await build_manifest_from_git_clean(skill_dir)
-			} else {
-				const kind = (manifest_source as {kind: string}).kind
-				console.error(`Error: unhandled manifest source kind: ${kind}`)
-				process.exit(1)
-			}
-		}
+		manifest = await build_manifest(skill_dir, source)
 	} catch (e: unknown) {
 		console.error(`Error: ${(e as Error).message}`)
 		process.exit(1)

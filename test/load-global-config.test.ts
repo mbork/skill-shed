@@ -70,3 +70,13 @@ test('load_global_config: empty DEFAULT_TARGET_DIRECTORY falls back to default',
 		delete process.env.SKILL_SHED_CONFIG
 	}
 })
+
+test('load_global_config: non-ENOENT error from readFile is rethrown', async () => {
+	const config_path = await make_tmp_dir()
+	process.env.SKILL_SHED_CONFIG = config_path
+	try {
+		await assert.rejects(load_global_config(), /EISDIR/)
+	} finally {
+		delete process.env.SKILL_SHED_CONFIG
+	}
+})

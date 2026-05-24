@@ -94,38 +94,19 @@ const command_help: Record<string, string> = {
 	help: help_help,
 }
 
-// * Exports
-
-export function print_general_help(): void {
-	console.log(general_help)
-}
-
-export function print_command_help(command: string): void {
-	const help = command_help[command]
-	if (help) {
-		console.log(help)
+// * help_and_exit
+// Print help for `command` (or general help if absent/`help`) and exit.
+// Exits 1 if the command is unknown, 0 otherwise.
+export function help_and_exit(command: string | undefined): never {
+	if (!command || command === 'help') {
+		console.log(general_help)
+		process.exit(0)
+	} else if (command in command_help) {
+		console.log(command_help[command])
+		process.exit(0)
 	} else {
 		console.error(`Unknown command: ${command}`)
 		console.log(general_help)
-	}
-}
-
-export function is_known_command(command: string): boolean {
-	return command in command_help
-}
-
-/** Print help for `command` (or general help if absent/`help`) and exit.
- *  Exits 1 if the command is unknown, 0 otherwise. */
-export function help_and_exit(command: string | undefined): never {
-	if (!command || command === 'help') {
-		print_general_help()
-		process.exit(0)
-	} else if (is_known_command(command)) {
-		print_command_help(command)
-		process.exit(0)
-	} else {
-		console.error(`Unknown command: ${command}`)
-		print_general_help()
 		process.exit(1)
 	}
 }

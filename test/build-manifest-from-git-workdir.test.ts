@@ -1,7 +1,7 @@
 // * Imports
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {writeFile, mkdir, rename, unlink} from 'node:fs/promises'
+import {chmod, mkdir, rename, unlink, writeFile} from 'node:fs/promises'
 import {join} from 'node:path'
 import {build_manifest_from_git_workdir} from '../src/manifest.ts'
 import {make_tmp_dir, setup_git, git_commit, exec_file} from './helpers.ts'
@@ -286,4 +286,17 @@ test('build_manifest_from_git_workdir: includes files in untracked subdirectory'
 	assert.deepStrictEqual(manifest.map(e => e.source_name), ['SKILL.md', 'subdir/file.txt'])
 	assert.strictEqual(manifest[0].target_content, 'hello')
 	assert.deepStrictEqual(manifest[1].target_content, Buffer.from('content'))
+})
+
+test('build_manifest_from_git_workdir: non-ENOENT/non-EISDIR readFile error rethrows', async () => {
+	const dir = await make_tmp_dir()
+	await writeFile(join(dir, 'SKILL.md'), '# Skill\n')
+	await setup_git(dir)
+	await git_commit(dir)
+	await chmod(join(dir, 'SKILL.md'), 0o000)
+	try {
+		await assert.rejects(build_manifest_from_git_workdir(dir), /EACCES/)
+	} finally {
+		await chmod(join(dir, 'SKILL.md'), 0o644)
+	}
 })

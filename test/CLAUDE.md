@@ -1,5 +1,20 @@
 # Test conventions
 
+## 100% test coverage
+
+Per the [100 Percent Code Coverage][1] section of "AI is forcing us to
+write good code", aim at 100% code coverage across statements,
+branches, functions, and lines.  Avoid `c8 ignore` directives at all
+costs – for example, prefer making assumptions which would fail loudly
+instead of adding checks for things that are always true to your
+knowledge.
+
+When a code path is unreachable from integration tests but lives in a
+pure function, prefer exporting the function for a focused unit test
+over `c8 ignore`.  Comparators and parsers are the typical candidates.
+
+[1]: https://bits.logic.inc/p/ai-is-forcing-us-to-write-good-code?open=false#%C2%A7100-percent-code-coverage
+
 ## Framework
 
 Node.js built-in test runner (`node --test`).  Import `test` from

@@ -34,3 +34,10 @@ test('help: `-h init` prints init help', async () => {
 	assert.strictEqual(result.code, 0)
 	assert.ok(result.stdout.startsWith('Usage: skill-shed init'))
 })
+
+test('help: unknown command exits 1 and prints general help', async () => {
+	const result = await run_script(['help', 'bogus'])
+	assert.strictEqual(result.code, 1)
+	assert.match(result.stderr, /Unknown command: bogus/)
+	assert.ok(result.stdout.startsWith('skill-shed - manage and deploy agent skills'))
+})

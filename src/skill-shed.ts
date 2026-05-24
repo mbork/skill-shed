@@ -5,7 +5,7 @@ import {resolve} from 'node:path'
 import {parseArgs} from 'node:util'
 import {init} from './init.ts'
 import {deploy} from './deploy.ts'
-import type {ManifestSource} from './deploy.ts'
+import type {ManifestSource} from './manifest.ts'
 import {lint} from './lint.ts'
 import {help_and_exit} from './help.ts'
 
@@ -41,13 +41,8 @@ function parse_args(raw_args: string[]): {
 			},
 		})
 	} catch (err) {
-		if (err instanceof Error && 'code' in err
-			&& typeof err.code === 'string'
-			&& err.code.startsWith('ERR_PARSE_ARGS_')) {
-			console.error(`Error: ${err.message}`)
-			process.exit(1)
-		}
-		throw err
+		console.error(`Error: ${(err as Error).message}`)
+		process.exit(1)
 	}
 	const {positionals, values} = parsed
 

@@ -30,20 +30,16 @@ export async function run_init(skill_dir: string, deploy_dir?: string, flags: st
 }
 
 export async function run_lint(skill_dir: string, flags: string[] = []): Promise<Run_result> {
-	const env = {...process.env}
-	delete env.TARGET_DIRECTORY
 	await setup_git(skill_dir)
 	await git_commit(skill_dir)
-	return run_script(['lint', skill_dir, ...flags], {env})
+	return run_script(['lint', skill_dir, ...flags])
 }
 
 export async function run_deploy(skill_dir: string, options: {cwd?: string, flags?: string[]} = {}): Promise<Run_result> {
-	const env = {...process.env}
-	delete env.TARGET_DIRECTORY
 	const flags = options.flags ?? []
 	await setup_git(skill_dir)
 	await git_commit(skill_dir)
-	return run_script(['deploy', skill_dir, ...flags], {env, cwd: options.cwd})
+	return run_script(['deploy', skill_dir, ...flags], {cwd: options.cwd})
 }
 
 export async function setup_git(skill_dir: string): Promise<void> {
@@ -70,6 +66,32 @@ export async function make_skill_dir(name = 'my-skill'): Promise<string> {
 	const skill_dir = join(tmp, name)
 	await mkdir(skill_dir)
 	return skill_dir
+}
+
+// Creates a skill_dir whose SKILL.md has a distinct value at each git layer, plus a matching
+// target_dir.  Used to verify deploy's source-mode dispatch reads the *right* layer:
+//   HEAD^ commit   -> 'older\n'
+//   HEAD  commit   -> 'head\n'
+//   index (staged) -> 'staged\n'
+//   working tree   -> 'workdir\n'
+export async function setup_skill_dir_with_distinct_layers(): Promise<{
+	skill_dir: string
+	target_dir: string
+}> {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+	await setup_git(skill_dir)
+	await writeFile(join(skill_dir, 'SKILL.md'), 'older\n')
+	await exec_file('git', ['add', 'SKILL.md'], {cwd: skill_dir})
+	await exec_file('git', ['commit', '-m', 'older'], {cwd: skill_dir})
+	await writeFile(join(skill_dir, 'SKILL.md'), 'head\n')
+	await exec_file('git', ['add', 'SKILL.md'], {cwd: skill_dir})
+	await exec_file('git', ['commit', '-m', 'head'], {cwd: skill_dir})
+	await writeFile(join(skill_dir, 'SKILL.md'), 'staged\n')
+	await exec_file('git', ['add', 'SKILL.md'], {cwd: skill_dir})
+	await writeFile(join(skill_dir, 'SKILL.md'), 'workdir\n')
+	return {skill_dir, target_dir}
 }
 
 // Returns non-comment, non-empty lines joined by newline — for asserting .env content

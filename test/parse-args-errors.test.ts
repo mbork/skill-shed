@@ -22,3 +22,25 @@ test('parseArgs error: unknown option is reported cleanly', async () => {
 	assert.match(result.stderr, /--bogus/)
 	assert.doesNotMatch(result.stderr, /at parseArgs/)
 })
+
+// * CLI-level mutex validation
+
+test('--comments and --no-comments together exits 1', async () => {
+	const result = await run_script(['init', 'some-dir', '--comments', '--no-comments'])
+	assert.strictEqual(result.code, 1)
+	assert.match(result.stderr, /--comments and --no-comments are mutually exclusive/)
+})
+
+test('--clean and --workdir together exits 1', async () => {
+	const result = await run_script(['deploy', 'some-dir', '--clean', '--workdir'])
+	assert.strictEqual(result.code, 1)
+	assert.match(result.stderr, /--clean, --workdir, --staged, and --ref are mutually exclusive/)
+})
+
+// * Unknown subcommand
+
+test('unknown subcommand exits 1 with help', async () => {
+	const result = await run_script(['bogus'])
+	assert.strictEqual(result.code, 1)
+	assert.match(result.stderr, /Unknown command: bogus/)
+})

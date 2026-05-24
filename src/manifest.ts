@@ -8,8 +8,9 @@
 import {execFile as execFile_cb} from 'node:child_process'
 import {readFile} from 'node:fs/promises'
 import {normalize, relative, resolve} from 'node:path'
-import {promisify} from 'node:util'
+import {parseEnv, promisify} from 'node:util'
 import {strip_html_comments} from './strip-html-comments.ts'
+import {detect_git} from './utils.ts'
 
 const execFile = promisify(execFile_cb)
 
@@ -26,6 +27,14 @@ export interface ManifestEntry {
 }
 
 export type Manifest = ManifestEntry[]
+
+// CLI-derivable manifest source.  MANIFEST_COMMAND from .env is a separate override
+// handled inside build_manifest, not a variant here.
+export type ManifestSource
+	= | {kind: 'clean'}
+		| {kind: 'workdir'}
+		| {kind: 'staged'}
+		| {kind: 'ref', ref: string}
 
 // * target_filename
 const SOURCE_SUFFIXES = ['.source.md']
@@ -180,17 +189,22 @@ export async function build_manifest_from_git_workdir(skill_dir: string): Promis
 	return entries.filter((e): e is ManifestEntry => e !== null)
 }
 
+// * compare_by_source_name
+// Comparator for sorting manifest-entry-like objects.  Exported so tests can exercise all
+// three branches: V8's sort on already-sorted real input (git listings) only ever calls the
+// comparator in one direction, and duplicate paths don't occur, so the > and = branches are
+// otherwise unreachable from integration tests.
+export function compare_by_source_name<T extends {source_name: string}>(a: T, b: T): number {
+	return a.source_name < b.source_name ? -1 : a.source_name > b.source_name ? 1 : 0
+}
+
 // * build_manifest_from_git_staged
 export async function build_manifest_from_git_staged(skill_dir: string): Promise<Manifest> {
 	// All files currently in the index (committed base + staged changes)
 	const ls_result = await execFile('git', ['ls-files', '--stage', '-z'], {cwd: skill_dir})
 	const raw_entries = ls_result.stdout.split('\0').filter(Boolean)
 	const entries = raw_entries.map((entry) => {
-		const match = entry.match(/^\S+ (\S+) (\d+)\t(.+)$/s)
-		if (!match) {
-			throw new Error(`unexpected git ls-files output: ${entry}`)
-		}
-		const [, hash, stage, source_name] = match
+		const [, hash, stage, source_name] = entry.match(/^\S+ (\S+) (\d+)\t(.+)$/s)!
 		return {hash, stage, source_name}
 	})
 	if (entries.some(e => e.stage !== '0')) {
@@ -214,9 +228,7 @@ export async function build_manifest_from_git_staged(skill_dir: string): Promise
 	} else if (entries.length === 0) {
 		throw new Error(`nothing staged in ${skill_dir}`)
 	}
-	const sorted_entries = entries.toSorted(
-		(a, b) => (a.source_name < b.source_name ? -1 : a.source_name > b.source_name ? 1 : 0),
-	)
+	const sorted_entries = entries.toSorted(compare_by_source_name)
 	const manifest: Manifest = await Promise.all(sorted_entries.map(async ({source_name, hash}) => {
 		// `any` needed: no `execFile` overload covers `encoding: 'buffer'`
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -257,18 +269,12 @@ export async function build_manifest_from_git_ref(
 	}
 	const raw_entries = ls_result.stdout.split('\0').filter(Boolean)
 	const entries = raw_entries.map((entry) => {
-		const match = entry.match(/^\S+ \S+ (\S+)\t(.+)$/s)
-		if (!match) {
-			throw new Error(`unexpected git ls-tree output: ${entry}`)
-		}
-		const [, hash, full_name] = match
+		const [, hash, full_name] = entry.match(/^\S+ \S+ (\S+)\t(.+)$/s)!
 		// Strip the skill_prefix/ prefix to get source_name relative to skill_dir
 		const source_name = skill_prefix ? full_name.slice(skill_prefix.length + 1) : full_name
 		return {hash, source_name}
 	})
-	const sorted_entries = entries.toSorted(
-		(a, b) => (a.source_name < b.source_name ? -1 : a.source_name > b.source_name ? 1 : 0),
-	)
+	const sorted_entries = entries.toSorted(compare_by_source_name)
 	const manifest: Manifest = await Promise.all(sorted_entries.map(async ({source_name, hash}) => {
 		// `any` needed: no `execFile` overload covers `encoding: 'buffer'`
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -279,4 +285,50 @@ export async function build_manifest_from_git_ref(
 		return make_manifest_entry(source_name, buffer)
 	}))
 	return manifest
+}
+
+// * read_manifest_command
+// Reads MANIFEST_COMMAND from skill_dir/.env, returning undefined when .env is absent.
+async function read_manifest_command(skill_dir: string): Promise<string | undefined> {
+	const env_path = resolve(skill_dir, '.env')
+	try {
+		const content = await readFile(env_path, 'utf8')
+		return parseEnv(content).MANIFEST_COMMAND
+	} catch (e: unknown) {
+		if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+			return undefined
+		}
+		throw e
+	}
+}
+
+// * build_manifest
+// MANIFEST_COMMAND in .env overrides the source: if present, run the command and use its
+// listing; otherwise dispatch on `source.kind`.
+export async function build_manifest(
+	skill_dir: string, source: ManifestSource,
+): Promise<Manifest> {
+	const manifest_command = await read_manifest_command(skill_dir)
+	if (manifest_command) {
+		return build_manifest_from_command(skill_dir, manifest_command)
+	}
+	const git_status = await detect_git(skill_dir)
+	if (git_status === 'no-git') {
+		throw new Error(
+			'git not found; install git and run `git init`, or set MANIFEST_COMMAND in .env',
+		)
+	}
+	if (git_status === 'no-repo') {
+		throw new Error('not a git repository; run `git init` or set MANIFEST_COMMAND in .env')
+	}
+	if (source.kind === 'clean') {
+		return build_manifest_from_git_clean(skill_dir)
+	}
+	if (source.kind === 'workdir') {
+		return build_manifest_from_git_workdir(skill_dir)
+	}
+	if (source.kind === 'staged') {
+		return build_manifest_from_git_staged(skill_dir)
+	}
+	return build_manifest_from_git_ref(skill_dir, source.ref)
 }

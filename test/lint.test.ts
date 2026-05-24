@@ -1,9 +1,9 @@
 // * Imports
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {writeFile} from 'node:fs/promises'
+import {mkdir, writeFile} from 'node:fs/promises'
 import {join} from 'node:path'
-import {run_lint, make_skill_dir} from './helpers.ts'
+import {run_lint, make_skill_dir, run_script, setup_git, git_commit} from './helpers.ts'
 
 // Minimal valid frontmatter for a skill dir named "my-skill" (the default from make_skill_dir).
 const FRONTMATTER = [
@@ -794,4 +794,19 @@ test('lint: consecutive `#` lines inside a tilde fence do not count as headings'
 
 	assert.strictEqual(result.code, 0)
 	assert.strictEqual(result.stdout.trim(), '')
+})
+
+// ** Manifest source errors
+
+test('lint: non-ENOENT error reading .env is reported via catch block', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody.\n')
+	await mkdir(join(skill_dir, '.env'))
+	await setup_git(skill_dir)
+	await git_commit(skill_dir)
+
+	const result = await run_script(['lint', skill_dir])
+
+	assert.strictEqual(result.code, 1)
+	assert.match(result.stderr, /Error:.*EISDIR/)
 })

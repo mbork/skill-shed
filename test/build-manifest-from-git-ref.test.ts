@@ -308,3 +308,13 @@ test('build_manifest_from_git_ref: succeeds even when index has conflicts', asyn
 	assert.deepStrictEqual(manifest.map(e => e.source_name), ['SKILL.md', 'file.txt'])
 	assert.deepStrictEqual(manifest[1].target_content, Buffer.from('main branch'))
 })
+
+test('build_manifest_from_git_ref: throws when skill_dir is not in a git repo', async () => {
+	const dir = await make_tmp_dir()
+	// no setup_git -- rev-parse --show-toplevel fails
+
+	await assert.rejects(
+		build_manifest_from_git_ref(dir, 'HEAD'),
+		{message: `${dir} is not inside a git repository`},
+	)
+})

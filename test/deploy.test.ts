@@ -1,13 +1,15 @@
 // * Imports
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {writeFile, readFile, readdir, mkdir, rmdir, stat, unlink} from 'node:fs/promises'
+import {chmod, mkdir, readdir, readFile, rmdir, stat, symlink, unlink, writeFile} from 'node:fs/promises'
 import {join, resolve} from 'node:path'
 import {homedir} from 'node:os'
-import {SIDECAR_FILENAME, find_stale_names, hash_content} from '../src/sidecar.ts'
-import {run_deploy, make_tmp_dir} from './helpers.ts'
+import {SIDECAR_FILENAME, hash_content} from '../src/sidecar.ts'
+import {run_deploy, run_script, make_tmp_dir, setup_skill_dir_with_distinct_layers} from './helpers.ts'
 
 // * Deploy
+
+// ** Deploy: basic flows
 
 test('deploy: missing .env', async () => {
 	const skill_dir = await make_tmp_dir()
@@ -216,7 +218,7 @@ test('deploy: non-SKILL .source.md has comments stripped when SKILL.md is a pass
 	)
 })
 
-// *** Deploy: sidecar
+// ** Deploy: sidecar
 
 test('deploy: sidecar written after first deploy', async () => {
 	const skill_dir = await make_tmp_dir()
@@ -245,6 +247,8 @@ test('deploy: second deploy with unchanged target succeeds', async () => {
 	const result = await run_deploy(skill_dir)
 
 	assert.strictEqual(result.code, 0)
+	const deployed = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
+	assert.strictEqual(deployed, content)
 })
 
 test('deploy: aborts when target was directly edited after last deploy', async () => {
@@ -305,7 +309,7 @@ test('deploy: --force overwrites file with no sidecar entry', async () => {
 	assert.strictEqual(deployed, content)
 })
 
-// *** Deploy: sentinel
+// ** Deploy: sentinel
 const SENTINEL_FILENAME = '.skill-shed-deploy-in-progress'
 
 test('deploy: aborts when interrupted deploy sentinel present', async () => {
@@ -353,7 +357,7 @@ test('deploy: sentinel absent after successful deploy', async () => {
 	assert.ok(!does_sentinel_exist, 'sentinel should not exist after successful deploy')
 })
 
-// *** Deploy: stale files
+// ** Deploy: stale files
 
 test('deploy: deletes unmodified owned stale file', async () => {
 	const skill_dir = await make_tmp_dir()
@@ -412,22 +416,123 @@ test('deploy: --force deletes modified owned stale file', async () => {
 	assert.strictEqual(sidecar.files['reference.md'], undefined)
 })
 
-// *** find_stale_names
+// ** Deploy: source modes and uncommon errors
 
-test('find_stale_names: returns empty when sidecar is empty', () => {
-	const manifest = [{source_name: 'SKILL.md', target_name: 'SKILL.md', source_content: '', target_content: ''}]
-	const sidecar = {version: 1, files: {}}
-	assert.deepStrictEqual(find_stale_names(manifest, sidecar), [])
+test('deploy: MANIFEST_COMMAND deploys files listed by the command', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), '# From command\n')
+	// These files exist in skill_dir but MANIFEST_COMMAND does not echo them, so they
+	// must NOT be deployed.
+	await writeFile(join(skill_dir, 'extra.md'), '# Extra\n')
+	await mkdir(join(skill_dir, 'subdir'))
+	await writeFile(join(skill_dir, 'subdir', 'nested.md'), '# Nested\n')
+	await writeFile(
+		join(skill_dir, '.env'),
+		`TARGET_DIRECTORY=${target_dir}\nMANIFEST_COMMAND=echo SKILL.md\n`,
+	)
+
+	const result = await run_deploy(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	const deployed = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
+	assert.strictEqual(deployed, '# From command\n')
+	const entries = await readdir(target_dir)
+	assert.deepStrictEqual(entries.toSorted(), [SIDECAR_FILENAME, 'SKILL.md'])
 })
 
-test('find_stale_names: returns empty when all sidecar entries are in manifest', () => {
-	const manifest = [{source_name: 'SKILL.md', target_name: 'SKILL.md', source_content: '', target_content: ''}]
-	const sidecar = {version: 1, files: {'SKILL.md': 'abc123'}}
-	assert.deepStrictEqual(find_stale_names(manifest, sidecar), [])
+test('deploy: builder error is reported and exits non-zero', async () => {
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), '# Skill\n')
+	await writeFile(
+		join(skill_dir, '.env'),
+		`TARGET_DIRECTORY=${target_dir}\nMANIFEST_COMMAND=false\n`,
+	)
+
+	const result = await run_deploy(skill_dir)
+
+	assert.strictEqual(result.code, 1)
+	assert.match(result.stderr, /Error:.*MANIFEST_COMMAND failed/)
 })
 
-test('find_stale_names: returns names in sidecar but not in manifest', () => {
-	const manifest = [{source_name: 'SKILL.md', target_name: 'SKILL.md', source_content: '', target_content: ''}]
-	const sidecar = {version: 1, files: {'SKILL.md': 'abc123', 'reference.md': 'def456'}}
-	assert.deepStrictEqual(find_stale_names(manifest, sidecar), ['reference.md'])
+test('deploy: --workdir reads working tree, not index or HEAD', async () => {
+	const {skill_dir, target_dir} = await setup_skill_dir_with_distinct_layers()
+
+	const result = await run_script(['deploy', skill_dir, '--workdir'])
+
+	assert.strictEqual(result.code, 0)
+	const deployed = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
+	assert.strictEqual(deployed, 'workdir\n')
+})
+
+test('deploy: --staged reads index, not working tree or HEAD', async () => {
+	const {skill_dir, target_dir} = await setup_skill_dir_with_distinct_layers()
+
+	const result = await run_script(['deploy', skill_dir, '--staged'])
+
+	assert.strictEqual(result.code, 0)
+	const deployed = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
+	assert.strictEqual(deployed, 'staged\n')
+})
+
+test('deploy: --ref HEAD^ reads named commit, not HEAD or index or working tree', async () => {
+	const {skill_dir, target_dir} = await setup_skill_dir_with_distinct_layers()
+
+	const result = await run_script(['deploy', skill_dir, '--ref', 'HEAD^'])
+
+	assert.strictEqual(result.code, 0)
+	const deployed = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
+	assert.strictEqual(deployed, 'older\n')
+})
+
+test('deploy: non-ENOENT error reading .env is reported', async () => {
+	const skill_dir = await make_tmp_dir()
+	await mkdir(join(skill_dir, '.env'))
+
+	const result = await run_script(['deploy', skill_dir])
+
+	assert.strictEqual(result.code, 1)
+	assert.match(result.stderr, /Error reading \.env:/)
+})
+
+test('deploy: non-ENOENT error from sentinel stat propagates', async () => {
+	// Contrived ELOOP via self-symlink covers has_sentinel's rethrow: when stat fails
+	// for any non-ENOENT reason, deploy must surface the error rather than proceed.
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), '# Skill\n')
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+	await run_deploy(skill_dir)
+
+	// Self-referential symlink at the sentinel path: stat() loops and throws ELOOP.
+	const sentinel_path = join(target_dir, '.skill-shed-deploy-in-progress')
+	await symlink('.skill-shed-deploy-in-progress', sentinel_path)
+
+	const result = await run_deploy(skill_dir)
+
+	assert.notStrictEqual(result.code, 0)
+	assert.match(result.stderr, /ELOOP/)
+})
+
+test('deploy: non-ENOENT error during stale cleanup propagates', async () => {
+	// Tightening perms on a sub-directory of target_dir makes unlink fail with EACCES;
+	// covers the stale-cleanup rethrow that prevents silently-skipped cleanup failures.
+	const skill_dir = await make_tmp_dir()
+	const target_dir = await make_tmp_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), '# Skill\n')
+	await mkdir(join(skill_dir, 'sub'))
+	await writeFile(join(skill_dir, 'sub', 'reference.md'), '# Ref\n')
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+	await run_deploy(skill_dir)
+
+	await unlink(join(skill_dir, 'sub', 'reference.md'))
+	await chmod(join(target_dir, 'sub'), 0o500)
+	try {
+		const result = await run_deploy(skill_dir)
+		assert.notStrictEqual(result.code, 0)
+		assert.match(result.stderr, /EACCES/)
+	} finally {
+		await chmod(join(target_dir, 'sub'), 0o755)
+	}
 })
