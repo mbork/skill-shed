@@ -588,7 +588,7 @@ Lint skill files for common errors before deployment.
 ** Blocked by
 - [[*Preserve line numbers while comment stripping]]
 
-** Steps [7/14]
+** Steps [7/15]
 - [X] Check that `SKILL.md` exists (error)
 - [X] Check for conflicting source files (two files resolving to the same target name) (error)
 - [X] Check for unclosed HTML comments (error); report file + line number
@@ -608,6 +608,11 @@ Lint skill files for common errors before deployment.
 - [X] Warn on empty sections — heading with no content (warning)
 - [X] Warn on empty skill body — =SKILL.md= body returned by =extract_frontmatter= is
   empty after =.trim()= (warning)
+- [ ] Warn on empty files other than =SKILL.md= — any manifest entry whose
+  =target_content= is a string that is empty or whitespace-only (warning); skip
+  =Buffer= entries (binary files); rationale: an empty file is almost always a
+  forgotten stub.  Conceivable false positives (test fixtures, deliberate
+  placeholders) are rare and the warning severity leaves the choice to the author
 - [ ] Warn on empty heading titles — heading line is one-to-six =#= chars followed by
   only blank chars (warning); fires independently of empty-section, so a title-less
   heading at EOF emits both warnings
