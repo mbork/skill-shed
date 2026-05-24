@@ -140,6 +140,30 @@ function check_no_empty_sections(manifest: Manifest): LintMessage[] {
 	return messages
 }
 
+// * check_empty_body
+// Severity: warning.  Body is everything after `body_start_line` — the same region
+// `check_no_empty_sections` inspects.  Runs regardless of frontmatter health: a file with
+// malformed frontmatter AND no body has two independent issues, both worth reporting.
+// Reported line is the first line where the body would begin (translated via line_map for
+// .source.md); past EOF when frontmatter is unclosed, which is intentional — it points the
+// author to where the body should be.
+function check_empty_body(entry: ManifestEntry): LintMessage[] {
+	const target = entry.target_content as string
+	const result = extract_frontmatter(target)
+	const lines = target.split('\n')
+	const body = lines.slice(result.body_start_line).join('\n')
+	if (body.trim() !== '') {
+		return []
+	}
+	const source_line = entry.line_map?.[result.body_start_line] ?? result.body_start_line
+	return [{
+		file: entry.source_name,
+		line: source_line + 1,
+		severity: 'warning',
+		message: 'body is empty',
+	}]
+}
+
 // * check_frontmatter
 const FRONTMATTER_SPEC_URL = 'https://agentskills.io/specification#frontmatter'
 
@@ -187,6 +211,7 @@ function lint_manifest(skill_dir: string, manifest: Manifest): LintMessage[] {
 		...check_no_unclosed_fences(manifest),
 		...check_no_empty_sections(manifest),
 		...(skill_md_entry != null ? check_frontmatter(skill_md_entry, skill_dir_name) : []),
+		...(skill_md_entry != null ? check_empty_body(skill_md_entry) : []),
 	]
 }
 

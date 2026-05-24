@@ -715,8 +715,8 @@ test('lint: empty section in a non-SKILL.md file is flagged', async () => {
 test('lint: unclosed frontmatter does not produce empty-section warnings', async () => {
 	const skill_dir = await make_skill_dir()
 	// No closing `---`: extract_frontmatter returns kind:'error' with body_start_line at EOF,
-	// so check_no_empty_sections sees no body and emits no warning.  Only the frontmatter
-	// error fires.
+	// so check_no_empty_sections sees no body and emits no empty-section warning.  The
+	// frontmatter error fires, and check_empty_body fires too (body region is empty).
 	await writeFile(join(skill_dir, 'SKILL.md'), '---\n# heading\n')
 
 	const result = await run_lint(skill_dir)
@@ -725,7 +725,8 @@ test('lint: unclosed frontmatter does not produce empty-section warnings', async
 	assert.strictEqual(
 		result.stdout,
 		'SKILL.md:0: error: frontmatter error: unclosed frontmatter (no closing --- or ...) '
-		+ '(see https://agentskills.io/specification#frontmatter)\n',
+		+ '(see https://agentskills.io/specification#frontmatter)\n'
+		+ 'SKILL.md:4: warning: body is empty\n',
 	)
 })
 
@@ -795,6 +796,74 @@ test('lint: consecutive `#` lines inside a tilde fence do not count as headings'
 	assert.strictEqual(result.code, 0)
 	assert.strictEqual(result.stdout.trim(), '')
 })
+
+// ** Empty skill body
+
+test('lint: SKILL.md with only frontmatter and no body is a warning', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER)
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, 'SKILL.md:5: warning: body is empty\n')
+})
+
+test('lint: SKILL.md body consisting only of whitespace is a warning', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '   \n\t\n\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, 'SKILL.md:5: warning: body is empty\n')
+})
+
+test('lint: SKILL.source.md whose body becomes empty after comment stripping is a warning',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(
+			join(skill_dir, 'SKILL.source.md'),
+			FRONTMATTER + '<!-- only a comment, stripped on deploy -->\n',
+		)
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(result.stdout, 'SKILL.source.md:5: warning: body is empty\n')
+	})
+
+test('lint: empty SKILL.md emits both the no-frontmatter error and the empty-body warning',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.md'), '')
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 1)
+		assert.strictEqual(
+			result.stdout,
+			'SKILL.md:0: error: SKILL.md has no frontmatter '
+			+ '(see https://agentskills.io/specification#frontmatter)\n'
+			+ 'SKILL.md:1: warning: body is empty\n',
+		)
+	})
+
+test('lint: invalid YAML frontmatter with an empty body emits both the error and the warning',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.md'), [
+			'---',
+			': bad: yaml:',
+			'---',
+			'',
+		].join('\n'))
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 1)
+		assert.match(result.stdout, /body is empty/)
+	})
 
 // ** Manifest source errors
 
