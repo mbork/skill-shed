@@ -613,7 +613,7 @@ Lint skill files for common errors before deployment.
   =Buffer= entries (binary files); rationale: an empty file is almost always a
   forgotten stub.  Conceivable false positives (test fixtures, deliberate
   placeholders) are rare and the warning severity leaves the choice to the author
-- [ ] Warn on empty heading titles — heading line is one-to-six =#= chars followed by
+- [X] Warn on empty heading titles — heading line is one-to-six =#= chars followed by
   only blank chars (warning); fires independently of empty-section, so a title-less
   heading at EOF emits both warnings
 - [ ] Warn on duplicate headings (warning)

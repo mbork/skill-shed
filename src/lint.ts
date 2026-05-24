@@ -140,6 +140,44 @@ function check_no_empty_sections(manifest: Manifest): LintMessage[] {
 	return messages
 }
 
+// * check_no_empty_heading_titles
+// Severity: warning.  An ATX heading line whose title is empty after stripping the leading
+// hashes (and optional CommonMark trailing-`#` closing sequence) — e.g. `#`, `# `, `##`, or
+// `### \t` — is flagged.  Independent of `check_no_empty_sections`: a title-less heading at
+// EOF emits BOTH warnings (no title AND empty section); a title-less heading followed by
+// content emits only this one.
+function check_no_empty_heading_titles(manifest: Manifest): LintMessage[] {
+	const messages: LintMessage[] = []
+	for (const entry of manifest) {
+		if (typeof entry.target_content !== 'string') {
+			continue
+		}
+		const frontmatter = extract_frontmatter(entry.target_content)
+		const body_start = frontmatter.body_start_line
+		const lines = entry.target_content.split('\n')
+		const body = lines.slice(body_start).join('\n')
+		const kinds = classify_lines(body)
+		for (let i = 0; i < kinds.length; i++) {
+			const k = kinds[i]
+			if (k.kind !== 'heading') {
+				continue
+			}
+			if (k.text !== '') {
+				continue
+			}
+			const target_line = body_start + i
+			const source_line = entry.line_map?.[target_line] ?? target_line
+			messages.push({
+				file: entry.source_name,
+				line: source_line + 1,
+				severity: 'warning',
+				message: 'empty heading title',
+			})
+		}
+	}
+	return messages
+}
+
 // * check_no_empty_files
 // Severity: warning.  Flags any non-SKILL.md entry whose target_content is empty (a string
 // that trims to empty, or a zero-length Buffer).  SKILL.md is handled by `check_empty_body`,
@@ -237,6 +275,7 @@ function lint_manifest(skill_dir: string, manifest: Manifest): LintMessage[] {
 		...check_no_unclosed_comments(manifest),
 		...check_no_unclosed_fences(manifest),
 		...check_no_empty_sections(manifest),
+		...check_no_empty_heading_titles(manifest),
 		...check_no_empty_files(manifest),
 		...(skill_md_entry != null ? check_frontmatter(skill_md_entry, skill_dir_name) : []),
 		...(skill_md_entry != null ? check_empty_body(skill_md_entry) : []),

@@ -658,15 +658,20 @@ test('lint: trailing-`#` closing sequence stripped from reported title', async (
 	assert.strictEqual(result.stdout, 'SKILL.md:6: warning: empty section "Title"\n')
 })
 
-test('lint: empty-titled heading produces `empty section ""`', async () => {
-	const skill_dir = await make_skill_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# \n')
+test('lint: empty-titled heading at EOF emits both empty-section and empty-title warnings',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# \n')
 
-	const result = await run_lint(skill_dir)
+		const result = await run_lint(skill_dir)
 
-	assert.strictEqual(result.code, 0)
-	assert.strictEqual(result.stdout, 'SKILL.md:6: warning: empty section ""\n')
-})
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(
+			result.stdout,
+			'SKILL.md:6: warning: empty section ""\n'
+			+ 'SKILL.md:6: warning: empty heading title\n',
+		)
+	})
 
 test('lint: multi-word title preserved in the warning text', async () => {
 	const skill_dir = await make_skill_dir()
@@ -863,6 +868,123 @@ test('lint: invalid YAML frontmatter with an empty body emits both the error and
 
 		assert.strictEqual(result.code, 1)
 		assert.match(result.stdout, /body is empty/)
+	})
+
+// ** Empty heading titles
+
+test('lint: heading with no title and a hash only is a warning', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'#',
+		'',
+		'body.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, 'SKILL.md:6: warning: empty heading title\n')
+})
+
+test('lint: title-less heading followed by content emits only the empty-title warning',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+			'# ',
+			'body.',
+			'',
+		].join('\n'))
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(result.stdout, 'SKILL.md:6: warning: empty heading title\n')
+	})
+
+test('lint: level-2 empty title is flagged', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Skill',
+		'',
+		'## ',
+		'sub-body.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, 'SKILL.md:8: warning: empty heading title\n')
+})
+
+test('lint: heading whose title is only whitespace is flagged', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'#  \t ',
+		'body.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, 'SKILL.md:6: warning: empty heading title\n')
+})
+
+test('lint: heading with a real title is not flagged', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Title',
+		'body.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), '')
+})
+
+test('lint: `#` line inside a fenced code block is not flagged', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Skill',
+		'',
+		'```',
+		'#',
+		'```',
+		'',
+		'body.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), '')
+})
+
+test('lint: empty-title warning in .source.md reports the source line via line_map',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.source.md'), [
+			'---',
+			'name: my-skill',
+			'description: Test skill.',
+			'---',
+			'',
+			'<!-- a comment, stripped -->',
+			'',
+			'# ',
+			'body.',
+			'',
+		].join('\n'))
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(result.stdout, 'SKILL.source.md:8: warning: empty heading title\n')
 	})
 
 // ** Empty non-SKILL.md files
