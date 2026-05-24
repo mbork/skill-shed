@@ -1,14 +1,13 @@
 // * Imports
-import {mkdir, readFile, stat, unlink, writeFile} from 'node:fs/promises'
+import {mkdir, stat, unlink, writeFile} from 'node:fs/promises'
 import {dirname, resolve} from 'node:path'
-import {parseEnv} from 'node:util'
 import {
 	build_manifest,
 	validate_manifest,
 	type Manifest,
 	type ManifestSource,
 } from './manifest.ts'
-import {expand_tilde} from './utils.ts'
+import {expand_tilde, read_env_file} from './utils.ts'
 
 import {
 	collect_overwrite_violations,
@@ -49,21 +48,18 @@ async function has_sentinel(target_dir: string): Promise<boolean> {
 // Resolves TARGET_DIRECTORY from skill_dir/.env to an absolute path.  Exits 1 if .env is
 // missing/unreadable or TARGET_DIRECTORY is not set.
 async function read_target_dir(skill_dir: string): Promise<string> {
-	const env_path = resolve(skill_dir, '.env')
-
-	let env_content: string
+	let env
 	try {
-		env_content = await readFile(env_path, 'utf8')
+		env = await read_env_file(resolve(skill_dir, '.env'))
 	} catch (e: unknown) {
-		const err = e as NodeJS.ErrnoException
-		if (err.code === 'ENOENT') {
-			console.error(`Error: no .env file found in ${skill_dir}, run \`skill-shed init\``)
-		} else {
-			console.error(`Error reading .env: ${err.message}`)
-		}
+		console.error(`Error reading .env: ${(e as Error).message}`)
 		process.exit(1)
 	}
-	const target_dir = expand_tilde(parseEnv(env_content).TARGET_DIRECTORY ?? '')
+	if (env === null) {
+		console.error(`Error: no .env file found in ${skill_dir}, run \`skill-shed init\``)
+		process.exit(1)
+	}
+	const target_dir = expand_tilde(env.TARGET_DIRECTORY ?? '')
 	if (!target_dir) {
 		console.error('Error: TARGET_DIRECTORY not set in .env')
 		process.exit(1)

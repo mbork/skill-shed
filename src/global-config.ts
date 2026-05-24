@@ -1,9 +1,7 @@
 // * Imports
-import {readFile} from 'node:fs/promises'
 import {resolve} from 'node:path'
 import {homedir} from 'node:os'
-import {parseEnv} from 'node:util'
-import {expand_tilde} from './utils.ts'
+import {expand_tilde, read_env_file} from './utils.ts'
 
 // * Types
 export interface Global_config {
@@ -19,17 +17,13 @@ const DEFAULT_CONFIG: Global_config = {
 export async function load_global_config(): Promise<Global_config> {
 	const config_path = process.env.SKILL_SHED_CONFIG
 		?? resolve(homedir(), '.skill-shed.env')
-	try {
-		const raw = await readFile(config_path, 'utf8')
-		const parsed = parseEnv(raw)
-		return {
-			default_target_directory: expand_tilde(parsed.DEFAULT_TARGET_DIRECTORY
-				|| DEFAULT_CONFIG.default_target_directory),
-		}
-	} catch (e: unknown) {
-		if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
-			return DEFAULT_CONFIG
-		}
-		throw e
+	const parsed = await read_env_file(config_path)
+	if (parsed === null) {
+		return DEFAULT_CONFIG
+	}
+	return {
+		default_target_directory: expand_tilde(
+			parsed.DEFAULT_TARGET_DIRECTORY || DEFAULT_CONFIG.default_target_directory,
+		),
 	}
 }

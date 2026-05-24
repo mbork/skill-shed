@@ -1,9 +1,24 @@
 // * Imports
 import {execFile as execFile_cb} from 'node:child_process'
+import {readFile} from 'node:fs/promises'
 import {homedir} from 'node:os'
-import {promisify} from 'node:util'
+import {parseEnv, promisify} from 'node:util'
 
 const execFile = promisify(execFile_cb)
+
+// * read_env_file
+// Reads and parses a dotenv-format file.  Returns the parsed map, or null when the file
+// is absent (ENOENT).  Other read errors propagate.
+export async function read_env_file(path: string): Promise<NodeJS.Dict<string> | null> {
+	try {
+		return parseEnv(await readFile(path, 'utf8'))
+	} catch (e: unknown) {
+		if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+			return null
+		}
+		throw e
+	}
+}
 
 // * detect_git
 export async function detect_git(dir: string): Promise<'no-git' | 'no-repo' | 'ok'> {

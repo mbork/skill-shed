@@ -8,9 +8,9 @@
 import {execFile as execFile_cb} from 'node:child_process'
 import {readFile} from 'node:fs/promises'
 import {normalize, relative, resolve} from 'node:path'
-import {parseEnv, promisify} from 'node:util'
+import {promisify} from 'node:util'
 import {strip_html_comments} from './strip-html-comments.ts'
-import {detect_git} from './utils.ts'
+import {detect_git, read_env_file} from './utils.ts'
 
 const execFile = promisify(execFile_cb)
 
@@ -290,16 +290,7 @@ export async function build_manifest_from_git_ref(
 // * read_manifest_command
 // Reads MANIFEST_COMMAND from skill_dir/.env, returning undefined when .env is absent.
 async function read_manifest_command(skill_dir: string): Promise<string | undefined> {
-	const env_path = resolve(skill_dir, '.env')
-	try {
-		const content = await readFile(env_path, 'utf8')
-		return parseEnv(content).MANIFEST_COMMAND
-	} catch (e: unknown) {
-		if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
-			return undefined
-		}
-		throw e
-	}
+	return (await read_env_file(resolve(skill_dir, '.env')))?.MANIFEST_COMMAND
 }
 
 // * build_manifest
