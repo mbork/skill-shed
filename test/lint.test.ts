@@ -666,11 +666,11 @@ test('lint: empty-titled heading at EOF emits both empty-section and empty-title
 		const result = await run_lint(skill_dir)
 
 		assert.strictEqual(result.code, 0)
-		assert.strictEqual(
-			result.stdout,
-			'SKILL.md:6: warning: empty section ""\n'
-			+ 'SKILL.md:6: warning: empty heading title\n',
-		)
+		assert.strictEqual(result.stdout, [
+			'SKILL.md:6: warning: empty section ""',
+			'SKILL.md:6: warning: empty heading title',
+			'',
+		].join('\n'))
 	})
 
 test('lint: multi-word title preserved in the warning text', async () => {
@@ -695,12 +695,12 @@ test('lint: multiple empty sections in one file produce multiple warnings', asyn
 	const result = await run_lint(skill_dir)
 
 	assert.strictEqual(result.code, 0)
-	assert.strictEqual(
-		result.stdout,
-		'SKILL.md:6: warning: empty section "A"\n'
-		+ 'SKILL.md:7: warning: empty section "B"\n'
-		+ 'SKILL.md:8: warning: empty section "C"\n',
-	)
+	assert.strictEqual(result.stdout, [
+		'SKILL.md:6: warning: empty section "A"',
+		'SKILL.md:7: warning: empty section "B"',
+		'SKILL.md:8: warning: empty section "C"',
+		'',
+	].join('\n'))
 })
 
 test('lint: empty section in a non-SKILL.md file is flagged', async () => {
@@ -727,12 +727,12 @@ test('lint: unclosed frontmatter does not produce empty-section warnings', async
 	const result = await run_lint(skill_dir)
 
 	assert.strictEqual(result.code, 1)
-	assert.strictEqual(
-		result.stdout,
+	assert.strictEqual(result.stdout, [
 		'SKILL.md:0: error: frontmatter error: unclosed frontmatter (no closing --- or ...) '
-		+ '(see https://agentskills.io/specification#frontmatter)\n'
-		+ 'SKILL.md:4: warning: body is empty\n',
-	)
+		+ '(see https://agentskills.io/specification#frontmatter)',
+		'SKILL.md:4: warning: body is empty',
+		'',
+	].join('\n'))
 })
 
 test('lint: empty section after invalid-YAML frontmatter is still flagged', async () => {
@@ -846,12 +846,12 @@ test('lint: empty SKILL.md emits both the no-frontmatter error and the empty-bod
 		const result = await run_lint(skill_dir)
 
 		assert.strictEqual(result.code, 1)
-		assert.strictEqual(
-			result.stdout,
+		assert.strictEqual(result.stdout, [
 			'SKILL.md:0: error: SKILL.md has no frontmatter '
-			+ '(see https://agentskills.io/specification#frontmatter)\n'
-			+ 'SKILL.md:1: warning: body is empty\n',
-		)
+			+ '(see https://agentskills.io/specification#frontmatter)',
+			'SKILL.md:1: warning: body is empty',
+			'',
+		].join('\n'))
 	})
 
 test('lint: invalid YAML frontmatter with an empty body emits both the error and the warning',
@@ -985,6 +985,385 @@ test('lint: empty-title warning in .source.md reports the source line via line_m
 
 		assert.strictEqual(result.code, 0)
 		assert.strictEqual(result.stdout, 'SKILL.source.md:8: warning: empty heading title\n')
+	})
+
+// ** Duplicate headings
+
+test('lint: two sibling headings with the same title produce a warning on the second',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+			'# Aqq',
+			'body.',
+			'',
+			'# Aqq',
+			'body.',
+			'',
+		].join('\n'))
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(
+			result.stdout,
+			'SKILL.md:9: warning: duplicate heading "Aqq" (also at line 6)\n',
+		)
+	})
+
+test('lint: three sibling duplicates emit two warnings, both pointing at the first',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+			'# Aqq',
+			'a.',
+			'# Aqq',
+			'b.',
+			'# Aqq',
+			'c.',
+			'',
+		].join('\n'))
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(result.stdout, [
+			'SKILL.md:8: warning: duplicate heading "Aqq" (also at line 6)',
+			'SKILL.md:10: warning: duplicate heading "Aqq" (also at line 6)',
+			'',
+		].join('\n'))
+	})
+
+test('lint: a subsection with the same title as its parent heading is flagged as ancestor duplicate',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+			'# Skill',
+			'',
+			'## Aqq',
+			'a.',
+			'### Aqq',
+			'b.',
+			'',
+		].join('\n'))
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(
+			result.stdout,
+			'SKILL.md:10: warning: heading "Aqq" duplicates an ancestor (also at line 8)\n',
+		)
+	})
+
+// Level skip: `### Aqq`'s direct parent is `# Parent` (no level-2 ancestor), and `## Aqq`'s
+// direct parent is also `# Parent`.  Both share `# Parent` as the direct parent but differ in
+// level, so the duplicate key (`${level}|${text}`) is different and no warning fires.
+test('lint: same title at different levels under the same parent is not a duplicate',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+			'# Parent',
+			'',
+			'### Aqq',
+			'a.',
+			'',
+			'## Aqq',
+			'b.',
+			'',
+		].join('\n'))
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(result.stdout.trim(), '')
+	})
+
+test('lint: sibling duplicate with intervening same-level sibling is still flagged',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+			'# Skill',
+			'',
+			'## Aqq',
+			'a.',
+			'',
+			'## Bum',
+			'b.',
+			'',
+			'## Aqq',
+			'c.',
+			'',
+		].join('\n'))
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(
+			result.stdout,
+			'SKILL.md:14: warning: duplicate heading "Aqq" (also at line 8)\n',
+		)
+	})
+
+test('lint: same title under different parents is not a duplicate', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Tool A',
+		'',
+		'## Examples',
+		'a.',
+		'',
+		'# Tool B',
+		'',
+		'## Examples',
+		'b.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), '')
+})
+
+test('lint: duplicate detection is case-sensitive', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Aqq',
+		'a.',
+		'# aqq',
+		'b.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), '')
+})
+
+test('lint: trailing-`#` closing sequence does not break duplicate detection', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Aqq',
+		'a.',
+		'# Aqq ###',
+		'b.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.md:8: warning: duplicate heading "Aqq" (also at line 6)\n',
+	)
+})
+
+test('lint: heading-shaped lines inside a fenced code block do not count', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Aqq',
+		'',
+		'```',
+		'# Aqq',
+		'```',
+		'',
+		'body.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), '')
+})
+
+test('lint: sibling duplicate with intervening subsection is still flagged', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Skill',
+		'',
+		'## Aqq',
+		'',
+		'### Bęc',
+		'a.',
+		'',
+		'## Aqq',
+		'b.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.md:13: warning: duplicate heading "Aqq" (also at line 8)\n',
+	)
+})
+
+test('lint: empty-titled duplicate headings do not produce a duplicate warning', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# ',
+		'a.',
+		'# ',
+		'b.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, [
+		'SKILL.md:6: warning: empty heading title',
+		'SKILL.md:8: warning: empty heading title',
+		'',
+	].join('\n'))
+})
+
+test('lint: ancestor match reports the outermost matching ancestor when multiple match',
+	async () => {
+		// Three nested headings with the same title: both `## Aqq` and `### Aqq` should
+		// report the outermost `# Aqq` — the root of the duplication chain.
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+			'# Aqq',
+			'a.',
+			'',
+			'## Aqq',
+			'b.',
+			'',
+			'### Aqq',
+			'c.',
+			'',
+		].join('\n'))
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(result.stdout, [
+			'SKILL.md:9: warning: heading "Aqq" duplicates an ancestor (also at line 6)',
+			'SKILL.md:12: warning: heading "Aqq" duplicates an ancestor (also at line 6)',
+			'',
+		].join('\n'))
+	})
+
+test('lint: sibling duplicate and ancestor match fire together on the same line', async () => {
+	// `# Aqq / ## Aqq / ## Aqq`: the second `## Aqq` is both a sibling-duplicate of the first
+	// `## Aqq` AND nested under the same-titled `# Aqq`.  Both warnings fire on the same line.
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Aqq',
+		'',
+		'## Aqq',
+		'a.',
+		'',
+		'## Aqq',
+		'b.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, [
+		'SKILL.md:8: warning: heading "Aqq" duplicates an ancestor (also at line 6)',
+		'SKILL.md:11: warning: duplicate heading "Aqq" (also at line 8)',
+		'SKILL.md:11: warning: heading "Aqq" duplicates an ancestor (also at line 6)',
+		'',
+	].join('\n'))
+})
+
+test('lint: non-direct ancestor with non-matching intermediate is flagged', async () => {
+	// `# Aqq / ## Bęc / ### Aqq`: the intermediate `## Bęc` does not match, but the outer
+	// `# Aqq` does — the nearest matching ancestor is the grandparent, two levels up.
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Aqq',
+		'',
+		'## Bęc',
+		'',
+		'### Aqq',
+		'body.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.md:10: warning: heading "Aqq" duplicates an ancestor (also at line 6)\n',
+	)
+})
+
+test('lint: ancestor match across a level skip', async () => {
+	// `# Aqq / ### Aqq` (no level 2 between): the ### heading's nearest ancestor is the # one,
+	// which they match.
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Aqq',
+		'',
+		'### Aqq',
+		'body.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.md:8: warning: heading "Aqq" duplicates an ancestor (also at line 6)\n',
+	)
+})
+
+test('lint: duplicate-heading warning in .source.md reports source lines via line_map',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.source.md'), FRONTMATTER + [
+			'<!-- a comment, stripped -->',
+			'',
+			'# Aqq',
+			'a.',
+			'',
+			'# Aqq',
+			'b.',
+			'',
+		].join('\n'))
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(
+			result.stdout,
+			'SKILL.source.md:11: warning: duplicate heading "Aqq" (also at line 8)\n',
+		)
+	})
+
+test('lint: ancestor-match warning in .source.md reports the ancestor line via line_map',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.source.md'), FRONTMATTER + [
+			'<!-- a comment, stripped -->',
+			'',
+			'# Aqq',
+			'a.',
+			'',
+			'## Aqq',
+			'b.',
+			'',
+		].join('\n'))
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(
+			result.stdout,
+			'SKILL.source.md:11: warning: heading "Aqq" duplicates an ancestor (also at line 8)\n',
+		)
 	})
 
 // ** Empty non-SKILL.md files

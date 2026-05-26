@@ -140,6 +140,94 @@ function check_no_empty_sections(manifest: Manifest): LintMessage[] {
 	return messages
 }
 
+// * check_no_duplicate_headings
+// Severity: warning.  Two kinds of duplicates are flagged, with distinct messages:
+//   1. Siblings — two headings sharing the same direct parent AND the same level AND the same
+//      (case-sensitive) title text.  Permits the common `# Tool A / ## Examples` +
+//      `# Tool B / ## Examples` pattern while still flagging the typical "forgot to rename a
+//      section" mistake.
+//   2. Ancestor — a heading whose title matches one of its ancestors in the hierarchy (any
+//      level, any depth).  Catches accidental nesting like `## Foo / ### Foo`.  When a heading
+//      matches multiple ancestors, only the outermost (highest-level / smallest hash count) is
+//      reported — that is the root of the duplication chain.
+// Both checks run for every non-empty heading and can fire together on the same line.  Empty
+// titles are skipped (already covered by `check_no_empty_heading_titles`).
+function check_no_duplicate_headings(manifest: Manifest): LintMessage[] {
+	const messages: LintMessage[] = []
+	for (const entry of manifest) {
+		if (typeof entry.target_content !== 'string') {
+			continue
+		}
+		const frontmatter = extract_frontmatter(entry.target_content)
+		const body_start = frontmatter.body_start_line
+		const lines = entry.target_content.split('\n')
+		const body = lines.slice(body_start).join('\n')
+		const kinds = classify_lines(body)
+		// Stack tracks ancestors of the current heading.  The synthetic root frame at level 0
+		// (text='', line=-1) holds top-level headings as siblings; each real frame stores the
+		// heading's own text and body-relative line index for ancestor-match lookup, plus a
+		// children_seen map of `${level}|${text}` → first-occurrence body-relative index for
+		// sibling duplicate detection.  first_index is preserved (not overwritten) so all
+		// later duplicates point back to the same first sibling.
+		const stack: {
+			level: number
+			text: string
+			line: number
+			children_seen: Map<string, number>
+		}[] = [{level: 0, text: '', line: -1, children_seen: new Map()}]
+		for (let i = 0; i < kinds.length; i++) {
+			const k = kinds[i]
+			// Skip non-heading lines and empty headings — the latter are reported by
+			// check_no_empty_heading_titles.
+			if (k.kind !== 'heading' || k.text === '') {
+				continue
+			}
+			// Unwind frames that aren't proper ancestors of this heading (same or deeper
+			// level) so the top becomes its direct parent.
+			while (stack[stack.length - 1].level >= k.level) {
+				stack.pop()
+			}
+			const target_line = body_start + i
+			const source_line = entry.line_map?.[target_line] ?? target_line
+			// Sibling duplicate
+			const parent = stack[stack.length - 1]
+			const key = `${k.level}|${k.text}`
+			const first_index = parent.children_seen.get(key)
+			if (first_index !== undefined) {
+				const first_target = body_start + first_index
+				const first_source = entry.line_map?.[first_target] ?? first_target
+				messages.push({
+					file: entry.source_name,
+					line: source_line + 1,
+					severity: 'warning',
+					message: `duplicate heading "${k.text}" (also at line ${first_source + 1})`,
+				})
+			} else {
+				parent.children_seen.set(key, i)
+			}
+			// Ancestor match: walk outward to inward (j=1 is the outermost real frame), report
+			// the first match — the root of the duplication chain.
+			for (let j = 1; j < stack.length; j++) {
+				if (stack[j].text === k.text) {
+					const ancestor_target = body_start + stack[j].line
+					const ancestor_source = entry.line_map?.[ancestor_target] ?? ancestor_target
+					messages.push({
+						file: entry.source_name,
+						line: source_line + 1,
+						severity: 'warning',
+						message:
+							`heading "${k.text}" duplicates an ancestor `
+							+ `(also at line ${ancestor_source + 1})`,
+					})
+					break
+				}
+			}
+			stack.push({level: k.level, text: k.text, line: i, children_seen: new Map()})
+		}
+	}
+	return messages
+}
+
 // * check_no_empty_heading_titles
 // Severity: warning.  An ATX heading line whose title is empty after stripping the leading
 // hashes (and optional CommonMark trailing-`#` closing sequence) — e.g. `#`, `# `, `##`, or
@@ -276,6 +364,7 @@ function lint_manifest(skill_dir: string, manifest: Manifest): LintMessage[] {
 		...check_no_unclosed_fences(manifest),
 		...check_no_empty_sections(manifest),
 		...check_no_empty_heading_titles(manifest),
+		...check_no_duplicate_headings(manifest),
 		...check_no_empty_files(manifest),
 		...(skill_md_entry != null ? check_frontmatter(skill_md_entry, skill_dir_name) : []),
 		...(skill_md_entry != null ? check_empty_body(skill_md_entry) : []),

@@ -42,6 +42,9 @@ Node.js built-in test runner (`node --test`).  Import `test` from
   paths.
 - Use `.ante`/`.post` suffixes (not `.old`/`.new`) when comparing
   before/after file states.
+- For test file contents, prefer real words over "foo", "bar" and
+  similar meaningless words.  If you need such "words" for brevity,
+  use "aqq", "bęc", "bum" and "trach".
 
 ## Helpers (`helpers.ts`)
 
