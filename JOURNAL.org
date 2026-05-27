@@ -634,6 +634,33 @@ Lint skill files for common errors before deployment.
   replace =validate_manifest= calls with the lint pass and delete =validate_manifest=
 
 ** Session log
+*** [2026-05-26]
+- Completed: four lint checks wired into =lint_manifest=: =check_empty_body= (SKILL.md
+  body empty after =body_start_line=, runs regardless of frontmatter health, reports first
+  body line via =line_map=); =check_no_empty_files= (non-SKILL.md entries with empty string
+  or zero-length Buffer; no text/binary distinction); =check_no_empty_heading_titles= (ATX
+  heading with empty title; independent of empty-section, both fire on title-less heading
+  at EOF); =check_no_duplicate_headings= (TWO message kinds — sibling duplicate AND
+  ancestor match — both can fire on the same line; ancestor reports the outermost match);
+  ~40 new integration tests; =test/CLAUDE.md= convention added (prefer real words; fall
+  back to "aqq"/"bęc"/"bum"/"trach"); existing multi-line =result.stdout= assertions
+  migrated to =[...].join('\n')= idiom; coverage holds at 100% across statements/branches/
+  functions/lines; new step added (skipped heading levels); steps now [10/16]
+- In progress: NONE
+- Next: step 7 — Warn on skipped heading levels (newly added; small spec already in the
+  step body)
+- Blockers: NONE
+- Decisions: empty-body and empty-section checks run regardless of frontmatter health
+  (mirror each other; double-report on broken files accepted as the right tradeoff);
+  empty-file check makes no text/binary distinction (0-byte file is content-free regardless
+  of extension); duplicate-headings is siblings-only (same level + same direct parent +
+  case-sensitive text) to preserve =# Tool A / ## Examples= + =# Tool B / ## Examples=
+  pattern; ancestor-match folded into =check_no_duplicate_headings= rather than a separate
+  step (same scaffolding); when multiple ancestors match, report the OUTERMOST (root of
+  the duplication chain); "also at line N" suffix (user-chosen phrasing) over "previously
+  at"; both heading-empty-title and duplicate-heading checks skip empty titles to avoid
+  double-noise
+
 *** [2026-05-21]
 - Completed: empty-section warning end-to-end (=check_no_empty_sections= in =src/lint.ts=,
   classification primitives in =src/md-parse.ts= — =HEADING_RE=, =LineKind=,
