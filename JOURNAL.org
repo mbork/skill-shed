@@ -588,7 +588,7 @@ Lint skill files for common errors before deployment.
 ** Blocked by
 - [[*Preserve line numbers while comment stripping]]
 
-** Steps [10/15]
+** Steps [10/16]
 - [X] Check that `SKILL.md` exists (error)
 - [X] Check for conflicting source files (two files resolving to the same target name) (error)
 - [X] Check for unclosed HTML comments (error); report file + line number
@@ -617,6 +617,12 @@ Lint skill files for common errors before deployment.
   only blank chars (warning); fires independently of empty-section, so a title-less
   heading at EOF emits both warnings
 - [X] Warn on duplicate headings (warning)
+- [ ] Warn on skipped heading levels (warning) — a heading whose level is more than one
+  greater than its predecessor's: a level-2 heading at the top of the body (no level-1
+  ancestor); a level-3 heading directly under a level-1 (skipping level 2); a level-4
+  after a level-2; etc.  Compare against the most recent heading (regardless of branch);
+  message: =heading level <N> follows level <M>, skipping <M+1>=.  Skip empty-titled
+  headings (already covered by =check_no_empty_heading_titles=).
 - [ ] Error if =description= exceeds 1024 characters (agentskills.io spec hard limit, see
   https://agentskills.io/specification#frontmatter)
 - [ ] Warning if =SKILL.md= body exceeds 20000 characters (~5000 tokens at 4 chars/token);
