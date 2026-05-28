@@ -515,8 +515,9 @@ test('lint: heading followed by blank lines only is a warning', async () => {
 test('lint: heading followed by sibling heading is a warning on the first only', async () => {
 	const skill_dir = await make_skill_dir()
 	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
-		'## A',
+		'# A',
 		'## B',
+		'## C',
 		'body.',
 		'',
 	].join('\n'))
@@ -524,7 +525,7 @@ test('lint: heading followed by sibling heading is a warning on the first only',
 	const result = await run_lint(skill_dir)
 
 	assert.strictEqual(result.code, 0)
-	assert.strictEqual(result.stdout, 'SKILL.md:6: warning: empty section "A"\n')
+	assert.strictEqual(result.stdout, 'SKILL.md:7: warning: empty section "B"\n')
 })
 
 test('lint: parent heading whose only content is a subsection is NOT flagged', async () => {
@@ -1060,6 +1061,9 @@ test('lint: a subsection with the same title as its parent heading is flagged as
 // level, so the duplicate key (`${level}|${text}`) is different and no warning fires.
 test('lint: same title at different levels under the same parent is not a duplicate',
 	async () => {
+		// The level-3 / level-2 mix under # Parent is the only way to put two
+		// differently-leveled headings under one parent; the inevitable skipped-level
+		// warning on `### Aqq` is incidental to what this test asserts.
 		const skill_dir = await make_skill_dir()
 		await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
 			'# Parent',
@@ -1075,7 +1079,10 @@ test('lint: same title at different levels under the same parent is not a duplic
 		const result = await run_lint(skill_dir)
 
 		assert.strictEqual(result.code, 0)
-		assert.strictEqual(result.stdout.trim(), '')
+		assert.strictEqual(
+			result.stdout,
+			'SKILL.md:8: warning: heading level 3 follows level 1, skipping 2\n',
+		)
 	})
 
 test('lint: sibling duplicate with intervening same-level sibling is still flagged',
@@ -1301,7 +1308,8 @@ test('lint: non-direct ancestor with non-matching intermediate is flagged', asyn
 
 test('lint: ancestor match across a level skip', async () => {
 	// `# Aqq / ### Aqq` (no level 2 between): the ### heading's nearest ancestor is the # one,
-	// which they match.
+	// which they match.  The level skip on `### Aqq` is incidental — both warnings fire on
+	// the same line.
 	const skill_dir = await make_skill_dir()
 	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
 		'# Aqq',
@@ -1314,10 +1322,11 @@ test('lint: ancestor match across a level skip', async () => {
 	const result = await run_lint(skill_dir)
 
 	assert.strictEqual(result.code, 0)
-	assert.strictEqual(
-		result.stdout,
-		'SKILL.md:8: warning: heading "Aqq" duplicates an ancestor (also at line 6)\n',
-	)
+	assert.strictEqual(result.stdout, [
+		'SKILL.md:8: warning: heading "Aqq" duplicates an ancestor (also at line 6)',
+		'SKILL.md:8: warning: heading level 3 follows level 1, skipping 2',
+		'',
+	].join('\n'))
 })
 
 test('lint: duplicate-heading warning in .source.md reports source lines via line_map',
@@ -1365,6 +1374,220 @@ test('lint: ancestor-match warning in .source.md reports the ancestor line via l
 			'SKILL.source.md:11: warning: heading "Aqq" duplicates an ancestor (also at line 8)\n',
 		)
 	})
+
+// ** Skipped heading levels
+
+test('lint: first heading at level 2 warns', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'## Aqq',
+		'body.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.md:6: warning: first heading is level 2, expected level 1\n',
+	)
+})
+
+test('lint: single skipped level reports the bare level number', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Aqq',
+		'',
+		'### Bęc',
+		'body.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.md:8: warning: heading level 3 follows level 1, skipping 2\n',
+	)
+})
+
+test('lint: multiple skipped levels report a compact range', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Aqq',
+		'',
+		'##### Bęc',
+		'body.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.md:8: warning: heading level 5 follows level 1, skipping 2-4\n',
+	)
+})
+
+test('lint: skip is detected against the most recent heading regardless of branch', async () => {
+	// # A / ## B / # C / ### D: D's predecessor is C (level 1), so D (level 3) skips level 2.
+	// The fact that an earlier branch had a level-2 heading is irrelevant.
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Aqq',
+		'',
+		'## Bęc',
+		'b.',
+		'',
+		'# Bum',
+		'',
+		'### Trach',
+		'd.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.md:13: warning: heading level 3 follows level 1, skipping 2\n',
+	)
+})
+
+test('lint: valid heading sequence 1->2->3->2->1 produces no warnings', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Aqq',
+		'',
+		'## Bęc',
+		'',
+		'### Bum',
+		'bum.',
+		'',
+		'## Trach',
+		'trach.',
+		'',
+		'# Aqq2',
+		'aqq2.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, '')
+})
+
+test('lint: jumping down by more than one level does not warn on the lower heading', async () => {
+	// Reach level 3 via a clean 1->2->3 lead-in so this test isolates the down-jump
+	// semantic only.  # Trach drops two levels (3 -> 1); going down is always silent
+	// regardless of distance.
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Aqq',
+		'',
+		'## Bęc',
+		'',
+		'### Bum',
+		'bum body.',
+		'',
+		'# Trach',
+		'trach body.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, '')
+})
+
+test('lint: empty-titled first heading at level 2 fires both warnings on the same line',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+			'## ',
+			'body.',
+			'',
+		].join('\n'))
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(result.stdout, [
+			'SKILL.md:6: warning: empty heading title',
+			'SKILL.md:6: warning: first heading is level 2, expected level 1',
+			'',
+		].join('\n'))
+	})
+
+test('lint: empty-titled heading counts as predecessor for level tracking', async () => {
+	// # Aqq, ### (empty), ### Bęc: the empty ### takes the skipped-level warning; the
+	// titled ### that follows is at the same level as its predecessor, so it is silent.
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Aqq',
+		'',
+		'### ',
+		'empty body.',
+		'',
+		'### Bęc',
+		'bęc body.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, [
+		'SKILL.md:8: warning: empty heading title',
+		'SKILL.md:8: warning: heading level 3 follows level 1, skipping 2',
+		'',
+	].join('\n'))
+})
+
+test('lint: heading-like line inside a fenced code block does not trigger skipped-level',
+	async () => {
+		const skill_dir = await make_skill_dir()
+		await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+			'# Aqq',
+			'',
+			'```',
+			'### not a heading',
+			'```',
+			'',
+		].join('\n'))
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(result.stdout, '')
+	})
+
+test('lint: skipped-level warning in .source.md reports source lines via line_map', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.source.md'), FRONTMATTER + [
+		'<!-- a comment, stripped -->',
+		'',
+		'# Aqq',
+		'',
+		'### Bęc',
+		'body.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.source.md:10: warning: heading level 3 follows level 1, skipping 2\n',
+	)
+})
 
 // ** Empty non-SKILL.md files
 

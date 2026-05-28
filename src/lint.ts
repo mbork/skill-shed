@@ -266,6 +266,62 @@ function check_no_empty_heading_titles(manifest: Manifest): LintMessage[] {
 	return messages
 }
 
+// * check_no_skipped_heading_levels
+// Severity: warning.  Flags a heading whose level is more than one greater than the most
+// recent heading's level (regardless of branch in the hierarchy).  Empty-titled headings
+// are NOT transparent: a `###` line is a level-3 heading whether or not it has text, and
+// reporting the skip on the actual offending line (rather than on the next titled heading)
+// keeps the diagnosis stable as the author adds/removes titles.  The "first heading in
+// body is deeper than level 1" case gets distinct phrasing because there is no real
+// predecessor.  Multi-level skips report a compact range (`2-4`); single skips report a
+// single number (`2`).
+function check_no_skipped_heading_levels(manifest: Manifest): LintMessage[] {
+	const messages: LintMessage[] = []
+	for (const entry of manifest) {
+		if (typeof entry.target_content !== 'string') {
+			continue
+		}
+		const frontmatter = extract_frontmatter(entry.target_content)
+		const body_start = frontmatter.body_start_line
+		const lines = entry.target_content.split('\n')
+		const body = lines.slice(body_start).join('\n')
+		const kinds = classify_lines(body)
+		let prev_level = 0
+		for (let i = 0; i < kinds.length; i++) {
+			const k = kinds[i]
+			if (k.kind !== 'heading') {
+				continue
+			}
+			const target_line = body_start + i
+			const source_line = entry.line_map?.[target_line] ?? target_line
+			if (prev_level === 0 && k.level > 1) {
+				messages.push({
+					file: entry.source_name,
+					line: source_line + 1,
+					severity: 'warning',
+					message: `first heading is level ${k.level}, expected level 1`,
+				})
+			} else if (k.level > prev_level + 1) {
+				const skip_start = prev_level + 1
+				const skip_end = k.level - 1
+				const range = skip_start === skip_end
+					? String(skip_start)
+					: `${skip_start}-${skip_end}`
+				messages.push({
+					file: entry.source_name,
+					line: source_line + 1,
+					severity: 'warning',
+					message:
+						`heading level ${k.level} follows level ${prev_level}, `
+						+ `skipping ${range}`,
+				})
+			}
+			prev_level = k.level
+		}
+	}
+	return messages
+}
+
 // * check_no_empty_files
 // Severity: warning.  Flags any non-SKILL.md entry whose target_content is empty (a string
 // that trims to empty, or a zero-length Buffer).  SKILL.md is handled by `check_empty_body`,
@@ -365,6 +421,7 @@ function lint_manifest(skill_dir: string, manifest: Manifest): LintMessage[] {
 		...check_no_empty_sections(manifest),
 		...check_no_empty_heading_titles(manifest),
 		...check_no_duplicate_headings(manifest),
+		...check_no_skipped_heading_levels(manifest),
 		...check_no_empty_files(manifest),
 		...(skill_md_entry != null ? check_frontmatter(skill_md_entry, skill_dir_name) : []),
 		...(skill_md_entry != null ? check_empty_body(skill_md_entry) : []),

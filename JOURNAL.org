@@ -588,7 +588,7 @@ Lint skill files for common errors before deployment.
 ** Blocked by
 - [[*Preserve line numbers while comment stripping]]
 
-** Steps [10/16]
+** Steps [11/16]
 - [X] Check that `SKILL.md` exists (error)
 - [X] Check for conflicting source files (two files resolving to the same target name) (error)
 - [X] Check for unclosed HTML comments (error); report file + line number
@@ -617,12 +617,14 @@ Lint skill files for common errors before deployment.
   only blank chars (warning); fires independently of empty-section, so a title-less
   heading at EOF emits both warnings
 - [X] Warn on duplicate headings (warning)
-- [ ] Warn on skipped heading levels (warning) — a heading whose level is more than one
+- [X] Warn on skipped heading levels (warning) — a heading whose level is more than one
   greater than its predecessor's: a level-2 heading at the top of the body (no level-1
   ancestor); a level-3 heading directly under a level-1 (skipping level 2); a level-4
   after a level-2; etc.  Compare against the most recent heading (regardless of branch);
-  message: =heading level <N> follows level <M>, skipping <M+1>=.  Skip empty-titled
-  headings (already covered by =check_no_empty_heading_titles=).
+  message: =heading level <N> follows level <M>, skipping <range>= where range is a
+  single number or =M+1-N-1= form; first-heading-at-top-of-body uses distinct phrasing
+  =first heading is level <N>, expected level 1=.  Empty-titled headings count
+  normally — they can both trigger and predecess skipped-level warnings.
 - [ ] Error if =description= exceeds 1024 characters (agentskills.io spec hard limit, see
   https://agentskills.io/specification#frontmatter)
 - [ ] Warning if =SKILL.md= body exceeds 20000 characters (~5000 tokens at 4 chars/token);
@@ -701,6 +703,52 @@ Lint skill files for common errors before deployment.
 - Decisions: NONE (all logged mid-session)
 
 ** Decisions
+*** [2026-05-27] – Empty-titled headings are NOT transparent to =check_no_skipped_heading_levels=
+**** Reason
+A =###= line is structurally a level-3 heading regardless of title text; the document
+hierarchy breaks at exactly that line.  Treating empty headings as transparent produces
+an unstable diagnosis: for =# A=, =###= (empty), =### B=, the transparent rule would
+report the skip on =### B=, but adding a title to the empty one (=# A=, =### Title=,
+=### B=) moves the warning to =### Title= — same structure, different reported line.
+Counting empty headings normally keeps the report pinned to the actual offending line and
+makes the two warnings (empty title + skipped level) independent facts about the same
+broken line, fixed together.
+**** Alternatives considered
+- Skip empty-titled headings (precedent from =check_no_duplicate_headings=): rejected
+  because the precedent doesn't transfer — you can't meaningfully duplicate an empty
+  title, but a level-3 empty heading still skips level 2.
+
+*** [2026-05-27] – Skipped-level message uses range form (=X= or =X-Y=), not prose
+**** Reason
+Compact and unambiguous for the common single-skip case (=skipping 2=) and scales
+cleanly to multi-skip (=skipping 2-4=).  Prose form (=skipping 2, 3 and 4=) reads slightly
+more naturally but is longer and the X-Y form is no less clear in an error message.
+**** Alternatives considered
+- Prose form with English list joining: rejected as longer for no clarity gain.
+
+*** [2026-05-27] – Distinct top-of-body phrasing instead of synthetic level-0 predecessor
+**** Reason
+When the first heading in the body is deeper than level 1, the message =first heading is
+level <N>, expected level 1= reads naturally.  The single-template alternative (=heading
+level 2 follows level 0, skipping 1=) requires the reader to understand a fake "level 0",
+which has no analog in Markdown.
+**** Alternatives considered
+- Synthetic level-0 predecessor with the unified template: rejected for the awkward
+  reading.
+
+*** [2026-05-27] – Defer the heading-iteration refactor (no shared =extract_headings= helper yet)
+**** Reason
+Three checks (=check_no_empty_heading_titles=, =check_no_duplicate_headings=, and the
+new =check_no_skipped_heading_levels=) share the pattern =extract_frontmatter= → slice
+body → =classify_lines= → iterate headings → translate via =line_map=.  A shared helper
+would cut ~10 lines from each but no remaining lint step needs heading structure, so
+the leverage is bounded.  Adding it now would mean touching two already-tested checks
+in the same step as a new one; preferred to keep the new step minimal and revisit the
+refactor if a fourth heading-based check appears.
+**** Alternatives considered
+- Refactor now: rejected to keep this step minimal; can be lifted into its own step
+  later if needed.
+
 *** [2026-05-01] – Validate all six spec-defined frontmatter fields
 **** Reason
 The agentskills.io spec defines exactly six portable fields: =name=, =description=, =license=,
