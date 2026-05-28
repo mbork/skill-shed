@@ -718,6 +718,33 @@ test('lint: empty section in a non-SKILL.md file is flagged', async () => {
 	)
 })
 
+test('lint: non-SKILL.md file starting with `---` is not skipped as frontmatter', async () => {
+	// A leading `---` in a non-SKILL.md file is a Markdown horizontal rule, not a
+	// frontmatter delimiter.  Heading checks must see the content before the matching
+	// `---` (and the matching `---` itself) rather than skipping past them.  Without the
+	// fix, body_start would jump to line 4, hiding `# Aqq` from the checks — `### Bęc`
+	// would then be reported as "first heading is level 3, expected level 1".  With the
+	// fix, `# Aqq` is visible and `### Bęc` correctly fires the skipped-level warning.
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody.\n')
+	await writeFile(join(skill_dir, 'reference.md'), [
+		'---',
+		'# Aqq',
+		'---',
+		'### Bęc',
+		'body.',
+		'',
+	].join('\n'))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(
+		result.stdout,
+		'reference.md:4: warning: heading level 3 follows level 1, skipping 2\n',
+	)
+})
+
 test('lint: unclosed frontmatter does not produce empty-section warnings', async () => {
 	const skill_dir = await make_skill_dir()
 	// No closing `---`: extract_frontmatter returns kind:'error' with body_start_line at EOF,

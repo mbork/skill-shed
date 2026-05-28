@@ -103,19 +103,28 @@ function check_no_unclosed_fences(manifest: Manifest): LintMessage[] {
 	return messages
 }
 
+// * get_body_start_line
+// Heading checks must skip the frontmatter region of `SKILL.md` (a `#`-prefixed YAML
+// comment at column 0 would otherwise be misclassified as an H1 heading).  Non-SKILL.md
+// files do not have frontmatter; a leading `---` there is a Markdown horizontal rule, not
+// a frontmatter delimiter, and the file body starts at line 0.
+function get_body_start_line(entry: ManifestEntry): number {
+	if (entry.target_name !== 'SKILL.md') {
+		return 0
+	}
+	return extract_frontmatter(entry.target_content as string).body_start_line
+}
+
 // * check_no_empty_sections
 // Severity: warning.  Runs over target content, so a section consisting only of comments
 // stripped from .source.md is reported empty (which is correct: that's what gets deployed).
-// Skips the frontmatter region (a `#`-prefixed YAML comment at column 0 inside frontmatter
-// would otherwise be misclassified as an H1 heading).
 function check_no_empty_sections(manifest: Manifest): LintMessage[] {
 	const messages: LintMessage[] = []
 	for (const entry of manifest) {
 		if (typeof entry.target_content !== 'string') {
 			continue
 		}
-		const frontmatter = extract_frontmatter(entry.target_content)
-		const body_start = frontmatter.body_start_line
+		const body_start = get_body_start_line(entry)
 		const lines = entry.target_content.split('\n')
 		const body = lines.slice(body_start).join('\n')
 		const kinds = classify_lines(body)
@@ -158,8 +167,7 @@ function check_no_duplicate_headings(manifest: Manifest): LintMessage[] {
 		if (typeof entry.target_content !== 'string') {
 			continue
 		}
-		const frontmatter = extract_frontmatter(entry.target_content)
-		const body_start = frontmatter.body_start_line
+		const body_start = get_body_start_line(entry)
 		const lines = entry.target_content.split('\n')
 		const body = lines.slice(body_start).join('\n')
 		const kinds = classify_lines(body)
@@ -240,8 +248,7 @@ function check_no_empty_heading_titles(manifest: Manifest): LintMessage[] {
 		if (typeof entry.target_content !== 'string') {
 			continue
 		}
-		const frontmatter = extract_frontmatter(entry.target_content)
-		const body_start = frontmatter.body_start_line
+		const body_start = get_body_start_line(entry)
 		const lines = entry.target_content.split('\n')
 		const body = lines.slice(body_start).join('\n')
 		const kinds = classify_lines(body)
@@ -281,8 +288,7 @@ function check_no_skipped_heading_levels(manifest: Manifest): LintMessage[] {
 		if (typeof entry.target_content !== 'string') {
 			continue
 		}
-		const frontmatter = extract_frontmatter(entry.target_content)
-		const body_start = frontmatter.body_start_line
+		const body_start = get_body_start_line(entry)
 		const lines = entry.target_content.split('\n')
 		const body = lines.slice(body_start).join('\n')
 		const kinds = classify_lines(body)
@@ -358,13 +364,13 @@ function check_no_empty_files(manifest: Manifest): LintMessage[] {
 // author to where the body should be.
 function check_empty_body(entry: ManifestEntry): LintMessage[] {
 	const target = entry.target_content as string
-	const result = extract_frontmatter(target)
+	const body_start = get_body_start_line(entry)
 	const lines = target.split('\n')
-	const body = lines.slice(result.body_start_line).join('\n')
+	const body = lines.slice(body_start).join('\n')
 	if (body.trim() !== '') {
 		return []
 	}
-	const source_line = entry.line_map?.[result.body_start_line] ?? result.body_start_line
+	const source_line = entry.line_map?.[body_start] ?? body_start
 	return [{
 		file: entry.source_name,
 		line: source_line + 1,
