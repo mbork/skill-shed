@@ -126,8 +126,7 @@ function check_no_empty_sections(manifest: Manifest): LintMessage[] {
 		}
 		const body_start = get_body_start_line(entry)
 		const lines = entry.target_content.split('\n')
-		const body = lines.slice(body_start).join('\n')
-		const kinds = classify_lines(body)
+		const kinds = classify_lines(lines.slice(body_start))
 		for (let i = 0; i < kinds.length; i++) {
 			const k = kinds[i]
 			if (k.kind !== 'heading') {
@@ -169,8 +168,7 @@ function check_no_duplicate_headings(manifest: Manifest): LintMessage[] {
 		}
 		const body_start = get_body_start_line(entry)
 		const lines = entry.target_content.split('\n')
-		const body = lines.slice(body_start).join('\n')
-		const kinds = classify_lines(body)
+		const kinds = classify_lines(lines.slice(body_start))
 		// Stack tracks ancestors of the current heading.  The synthetic root frame at level 0
 		// (text='', line=-1) holds top-level headings as siblings; each real frame stores the
 		// heading's own text and body-relative line index for ancestor-match lookup, plus a
@@ -250,8 +248,7 @@ function check_no_empty_heading_titles(manifest: Manifest): LintMessage[] {
 		}
 		const body_start = get_body_start_line(entry)
 		const lines = entry.target_content.split('\n')
-		const body = lines.slice(body_start).join('\n')
-		const kinds = classify_lines(body)
+		const kinds = classify_lines(lines.slice(body_start))
 		for (let i = 0; i < kinds.length; i++) {
 			const k = kinds[i]
 			if (k.kind !== 'heading') {
@@ -290,8 +287,7 @@ function check_no_skipped_heading_levels(manifest: Manifest): LintMessage[] {
 		}
 		const body_start = get_body_start_line(entry)
 		const lines = entry.target_content.split('\n')
-		const body = lines.slice(body_start).join('\n')
-		const kinds = classify_lines(body)
+		const kinds = classify_lines(lines.slice(body_start))
 		let prev_level = 0
 		for (let i = 0; i < kinds.length; i++) {
 			const k = kinds[i]

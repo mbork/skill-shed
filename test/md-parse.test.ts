@@ -241,42 +241,42 @@ test('HEADING_RE: 4-space indent does not match (indented code block per CommonM
 // * classify_lines
 
 test('classify_lines: blank line → blank', () => {
-	assert.deepStrictEqual(classify_lines(''), [{kind: 'blank'}])
+	assert.deepStrictEqual(classify_lines(['']), [{kind: 'blank'}])
 })
 
 test('classify_lines: ordinary text → content', () => {
-	assert.deepStrictEqual(classify_lines('some text'), [{kind: 'content'}])
+	assert.deepStrictEqual(classify_lines(['some text']), [{kind: 'content'}])
 })
 
 test('classify_lines: heading preserves level and title', () => {
 	assert.deepStrictEqual(
-		classify_lines('## My Heading'),
+		classify_lines(['## My Heading']),
 		[{kind: 'heading', level: 2, text: 'My Heading'}],
 	)
 })
 
 test('classify_lines: bare `#` → heading with empty text', () => {
-	assert.deepStrictEqual(classify_lines('#'), [{kind: 'heading', level: 1, text: ''}])
+	assert.deepStrictEqual(classify_lines(['#']), [{kind: 'heading', level: 1, text: ''}])
 })
 
 test('classify_lines: `# ` (hash + space) → heading with empty text', () => {
-	assert.deepStrictEqual(classify_lines('# '), [{kind: 'heading', level: 1, text: ''}])
+	assert.deepStrictEqual(classify_lines(['# ']), [{kind: 'heading', level: 1, text: ''}])
 })
 
 test('classify_lines: trailing-`#` closing sequence stripped from heading text', () => {
 	assert.deepStrictEqual(
-		classify_lines('## Foo ##'),
+		classify_lines(['## Foo ##']),
 		[{kind: 'heading', level: 2, text: 'Foo'}],
 	)
 })
 
 test('classify_lines: fence opener, body, and closer all classified as content', () => {
-	const content = [
+	const lines = [
 		'```',
 		'body',
 		'```',
-	].join('\n')
-	assert.deepStrictEqual(classify_lines(content), [
+	]
+	assert.deepStrictEqual(classify_lines(lines), [
 		{kind: 'content'},
 		{kind: 'content'},
 		{kind: 'content'},
@@ -284,12 +284,12 @@ test('classify_lines: fence opener, body, and closer all classified as content',
 })
 
 test('classify_lines: `#` inside a backtick fence is content, not heading', () => {
-	const content = [
+	const lines = [
 		'```',
 		'# fake',
 		'```',
-	].join('\n')
-	assert.deepStrictEqual(classify_lines(content), [
+	]
+	assert.deepStrictEqual(classify_lines(lines), [
 		{kind: 'content'},
 		{kind: 'content'},
 		{kind: 'content'},
@@ -297,12 +297,12 @@ test('classify_lines: `#` inside a backtick fence is content, not heading', () =
 })
 
 test('classify_lines: `#` inside a tilde fence is content, not heading', () => {
-	const content = [
+	const lines = [
 		'~~~',
 		'# fake',
 		'~~~',
-	].join('\n')
-	assert.deepStrictEqual(classify_lines(content), [
+	]
+	assert.deepStrictEqual(classify_lines(lines), [
 		{kind: 'content'},
 		{kind: 'content'},
 		{kind: 'content'},
@@ -310,12 +310,12 @@ test('classify_lines: `#` inside a tilde fence is content, not heading', () => {
 })
 
 test('classify_lines: blank line inside a fence is content (not blank)', () => {
-	const content = [
+	const lines = [
 		'```',
 		'',
 		'```',
-	].join('\n')
-	assert.deepStrictEqual(classify_lines(content), [
+	]
+	assert.deepStrictEqual(classify_lines(lines), [
 		{kind: 'content'},
 		{kind: 'content'},
 		{kind: 'content'},
@@ -323,14 +323,14 @@ test('classify_lines: blank line inside a fence is content (not blank)', () => {
 })
 
 test('classify_lines: real headings outside, pseudo-heading inside fence', () => {
-	const content = [
+	const lines = [
 		'# H1',
 		'```',
 		'# fake',
 		'```',
 		'# H2',
-	].join('\n')
-	assert.deepStrictEqual(classify_lines(content), [
+	]
+	assert.deepStrictEqual(classify_lines(lines), [
 		{kind: 'heading', level: 1, text: 'H1'},
 		{kind: 'content'},
 		{kind: 'content'},

@@ -71,10 +71,11 @@ export type LineKind
 		| {kind: 'blank'}
 		| {kind: 'content'}
 
-// Classify each line of `content`.  Lines inside fenced code blocks (opener, body, closer)
-// are all classified as 'content' — including ones that look like headings or are blank.
-export function classify_lines(content: string): LineKind[] {
-	const lines = content.split('\n')
+// Classify each line.  Lines inside fenced code blocks (opener, body, closer) are all
+// classified as 'content' — including ones that look like headings or are blank.  Callers
+// pass an already-split `string[]` so a sliced subset (e.g. body region) can be classified
+// without re-splitting.
+export function classify_lines(lines: string[]): LineKind[] {
 	const fence = make_fence_tracker()
 	const kinds: LineKind[] = []
 	for (let i = 0; i < lines.length; i++) {
