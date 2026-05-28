@@ -22,7 +22,6 @@ export type FrontmatterResult
 		| {
 			kind: 'ok'
 			fields: Record<string, unknown>
-			body: string
 			field_lines: Map<string, number> // key → 1-based file line number
 			body_start_line: number
 		}
@@ -55,7 +54,6 @@ export function extract_frontmatter(content: string): FrontmatterResult {
 
 	const body_start_line = close_line + 1
 	const yaml_content = lines.slice(1, close_line).join('\n')
-	const body = lines.slice(close_line + 1).join('\n')
 	const doc = parseDocument(yaml_content)
 
 	if (doc.errors.length > 0) {
@@ -88,7 +86,7 @@ export function extract_frontmatter(content: string): FrontmatterResult {
 		}
 	}
 
-	return {kind: 'ok', fields, body, field_lines, body_start_line}
+	return {kind: 'ok', fields, field_lines, body_start_line}
 }
 
 // * validate_frontmatter_field

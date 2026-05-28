@@ -88,7 +88,7 @@ test('extract_frontmatter: body after frontmatter', () => {
 	if (result.kind !== 'ok') {
 		return
 	}
-	assert.equal(result.body, '\n## Instructions\n')
+	assert.equal(result.body_start_line, 4)
 })
 
 test('extract_frontmatter: closing ... is accepted', () => {
@@ -103,7 +103,7 @@ test('extract_frontmatter: closing ... is accepted', () => {
 	if (result.kind !== 'ok') {
 		return
 	}
-	assert.equal(result.body, 'body')
+	assert.equal(result.body_start_line, 4)
 })
 
 test('extract_frontmatter: trailing whitespace on --- accepted', () => {
@@ -129,7 +129,7 @@ test('extract_frontmatter: empty frontmatter block → ok with empty fields', ()
 		return
 	}
 	assert.deepStrictEqual(result.fields, {})
-	assert.equal(result.body, 'body\n')
+	assert.equal(result.body_start_line, 2)
 })
 
 test('extract_frontmatter: metadata nested mapping preserved', () => {
