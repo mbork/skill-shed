@@ -1713,8 +1713,8 @@ test('lint: SKILL.md body of 20001 chars warns with full message', async () => {
 	assert.strictEqual(
 		result.stdout,
 		'SKILL.md:5: warning: body length (20001 chars) exceeds the 20000-character '
-		+ 'recommended maximum (~5000 tokens at 4 chars/token); '
-		+ 'see https://agentskills.io/specification#progressive-disclosure\n',
+		+ 'recommended maximum (~5000 tokens at 4 chars/token) '
+		+ '(see https://agentskills.io/specification#progressive-disclosure)\n',
 	)
 })
 

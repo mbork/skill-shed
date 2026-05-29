@@ -25,11 +25,19 @@ export interface LintMessage {
 	line: number // 0 = whole-skill (no specific line)
 	severity: LintSeverity
 	message: string
+	// An actionable pointer the reader can follow: a spec URL or a suggested fix.  Never free
+	// prose — that belongs in `message`.  Rendered as a trailing `(see ...)` by
+	// `format_lint_message`, keeping `message` pure violation text for structured consumers.
+	reference?: string
 }
 
 // * format_lint_message
 export function format_lint_message(msg: LintMessage): string {
-	return `${msg.file}:${msg.line}: ${msg.severity}: ${msg.message}`
+	const base = `${msg.file}:${msg.line}: ${msg.severity}: ${msg.message}`
+	if (msg.reference === undefined) {
+		return base
+	}
+	return `${base} (see ${msg.reference})`
 }
 
 // * check_skill_md_exists
@@ -414,17 +422,13 @@ function check_body_length(entry: ManifestEntry): LintMessage[] {
 		severity: 'warning',
 		message:
 			`body length (${trimmed_length} chars) exceeds the ${SKILL_BODY_MAX}-character `
-			+ `recommended maximum (~${approx_tokens} tokens at 4 chars/token); `
-			+ `see ${PROGRESSIVE_DISCLOSURE_URL}`,
+			+ `recommended maximum (~${approx_tokens} tokens at 4 chars/token)`,
+		reference: PROGRESSIVE_DISCLOSURE_URL,
 	}]
 }
 
 // * check_frontmatter
 const FRONTMATTER_SPEC_URL = 'https://agentskills.io/specification#frontmatter'
-
-function with_spec_ref(message: string): string {
-	return `${message} (see ${FRONTMATTER_SPEC_URL})`
-}
 
 function check_frontmatter(entry: ManifestEntry, skill_dir_name: string): LintMessage[] {
 	// Caller filters for SKILL.md, whose target_content is always a string (manifest.ts
@@ -435,7 +439,8 @@ function check_frontmatter(entry: ManifestEntry, skill_dir_name: string): LintMe
 			file: entry.source_name,
 			line: 0,
 			severity: 'error',
-			message: with_spec_ref(`${entry.source_name} has no frontmatter`),
+			message: `${entry.source_name} has no frontmatter`,
+			reference: FRONTMATTER_SPEC_URL,
 		}]
 	}
 	if (result.kind === 'error') {
@@ -443,7 +448,8 @@ function check_frontmatter(entry: ManifestEntry, skill_dir_name: string): LintMe
 			file: entry.source_name,
 			line: 0,
 			severity: 'error',
-			message: with_spec_ref(`frontmatter error: ${result.message}`),
+			message: `frontmatter error: ${result.message}`,
+			reference: FRONTMATTER_SPEC_URL,
 		}]
 	}
 	const issues = validate_frontmatter(result.fields, result.field_lines, skill_dir_name)
@@ -451,7 +457,8 @@ function check_frontmatter(entry: ManifestEntry, skill_dir_name: string): LintMe
 		file: entry.source_name,
 		line: issue.line,
 		severity: issue.severity,
-		message: with_spec_ref(issue.message),
+		message: issue.message,
+		reference: FRONTMATTER_SPEC_URL,
 	}))
 }
 

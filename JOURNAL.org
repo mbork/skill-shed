@@ -141,7 +141,7 @@ it at =postinstall= time works without any flag.
 - Blockers: NONE
 - Decisions: all logged above.
 
-* TODO Restructure =LintMessage= to separate message from presentation
+* DONE Restructure =LintMessage= to separate message from presentation
 Currently =LintMessage.message= carries both the violation text and a tacked-on
 =(see <url>)= suffix added by =with_spec_ref()= in =src/lint.ts=.  This mixes data
 with presentation: a future JSON/IDE-friendly output mode would have to strip the
@@ -169,6 +169,43 @@ Some editors may parse the second variant oddly.
 
 Source: opus subagent review of [2026-05-08] staged changes (=with_spec_ref()=
 in =check_frontmatter=).
+
+** Decisions
+*** [2026-05-29] – Add a single optional =reference?: string= field; reject =category=
+**** Reason
+=/assess= concluded the headline motive (a future JSON/IDE output mode) is
+speculative with no consumer in the 16-step plan.  What actually justified the
+change was present-tense: the spec-URL idiom had already drifted — frontmatter
+messages went through =with_spec_ref()= (parenthetical =(see <url>)=) while
+=check_body_length= inlined =; see <url>= by hand.  One =reference?: string= field,
+rendered as a trailing =(see ...)= by =format_lint_message=, unifies both and
+keeps =message= pure violation text.  Doing it now (before step 16 wires lint into
+=deploy=) avoids migrating message-asserting tests twice.
+**** Alternatives considered
+- =category= discriminator (='frontmatter' | 'fences' | ...=) with a URL lookup
+  table: rejected as over-engineering — nothing filters or groups by category, so
+  it builds infrastructure for an absent feature.  Revisit only when a real
+  consumer (e.g. =--errors-only=, grouped output) appears.
+- Test-side-only fix (a shared =SPEC_HINT= const, leave the interface alone):
+  neutralizes the test-brittleness con at near-zero cost but leaves the live
+  =with_spec_ref=/inline drift in place.  Rejected in favour of fixing the root.
+
+** Session log
+*** [2026-05-29] (session 12)
+- Completed: added =reference?: string= to =LintMessage= (one-line contract docstring:
+  actionable pointer — spec URL or suggested fix, never free prose); =format_lint_message=
+  renders it as a trailing =(see ...)=; deleted =with_spec_ref()=, inlining
+  =reference: FRONTMATTER_SPEC_URL= at the three =check_frontmatter= returns;
+  =check_body_length= moved its URL from a =; see <url>= message suffix to =reference=
+  (output now matches the frontmatter =(see ...)= form).  One test updated
+  (body-length stdout assertion =; see= → = (see ...)=); the seven frontmatter stdout
+  assertions are byte-identical post-change and needed no edit.
+- In progress: NONE
+- Next: Skill linting — step 14 (unreferenced files) then step 16 (wire lint into deploy),
+  or step 6 (=--check-urls=)
+- Blockers: NONE.  NOTE: this session ran under a remote-control channel that injected
+  spurious text into tool outputs; verified results via exit codes and =git diff= instead.
+- Decisions: all logged above; =category= explicitly deferred
 
 * TODO Run linter against a real skill collection for integration validation
 Download a publicly available skill collection and run =skill-shed lint= on them to catch
@@ -637,7 +674,7 @@ Lint skill files for common errors before deployment.
   replace =validate_manifest= calls with the lint pass and delete =validate_manifest=
 
 ** Session log
-*** [2026-05-29]
+*** [2026-05-29] (session 11)
 - Completed: step 7 (=check_no_skipped_heading_levels=, ~10 integration tests); step 11
   (description length cap — already shipped as part of step 5, just checked off); step 12
   (=check_body_length= with =.trim()= semantic, cites progressive-disclosure spec, reports
