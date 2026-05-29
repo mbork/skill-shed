@@ -115,11 +115,32 @@ function get_body_start_line(entry: ManifestEntry): number {
 	return extract_frontmatter(entry.target_content as string).body_start_line
 }
 
-// * check_no_empty_sections
-// Severity: warning.  Runs over target content, so a section consisting only of comments
-// stripped from .source.md is reported empty (which is correct: that's what gets deployed).
-function check_no_empty_sections(manifest: Manifest): LintMessage[] {
-	const messages: LintMessage[] = []
+// * Types for parsed lint data
+
+// HeadingInfo carries everything the heading-based checks need: structural data from the
+// heading line itself (level, text), a precomputed 1-based source line ready for messages
+// (line_map translation already applied), and a precomputed `is_section_empty` flag so the
+// "section between this heading and the next at the same or higher level" scan happens once
+// per heading, in `extract_headings`, rather than independently in `check_no_empty_sections`.
+interface HeadingInfo {
+	level: number
+	text: string
+	source_line: number // 1-based source line, ready for messages
+	is_section_empty: boolean
+}
+
+interface EntryHeadings {
+	entry: ManifestEntry
+	headings: HeadingInfo[]
+}
+
+// * extract_headings
+// Per-entry one-time parsing for the four heading-based checks.  Splits content, locates the
+// body region, runs `classify_lines` once, then walks kinds to extract heading info — the
+// `line_map` translation and the section-emptiness scan both happen here so checks consume
+// self-contained `HeadingInfo` records.
+function extract_headings(manifest: Manifest): EntryHeadings[] {
+	const result: EntryHeadings[] = []
 	for (const entry of manifest) {
 		if (typeof entry.target_content !== 'string') {
 			continue
@@ -127,21 +148,41 @@ function check_no_empty_sections(manifest: Manifest): LintMessage[] {
 		const body_start = get_body_start_line(entry)
 		const lines = entry.target_content.split('\n')
 		const kinds = classify_lines(lines.slice(body_start))
+		const headings: HeadingInfo[] = []
 		for (let i = 0; i < kinds.length; i++) {
 			const k = kinds[i]
 			if (k.kind !== 'heading') {
 				continue
 			}
-			if (!is_section_empty(kinds, i, k.level)) {
+			const target_line = body_start + i
+			const source_line = (entry.line_map?.[target_line] ?? target_line) + 1
+			headings.push({
+				level: k.level,
+				text: k.text,
+				source_line,
+				is_section_empty: is_section_empty(kinds, i, k.level),
+			})
+		}
+		result.push({entry, headings})
+	}
+	return result
+}
+
+// * check_no_empty_sections
+// Severity: warning.  Runs over target content, so a section consisting only of comments
+// stripped from .source.md is reported empty (which is correct: that's what gets deployed).
+function check_no_empty_sections(entry_headings: EntryHeadings[]): LintMessage[] {
+	const messages: LintMessage[] = []
+	for (const {entry, headings} of entry_headings) {
+		for (const h of headings) {
+			if (!h.is_section_empty) {
 				continue
 			}
-			const target_line = body_start + i
-			const source_line = entry.line_map?.[target_line] ?? target_line
 			messages.push({
 				file: entry.source_name,
-				line: source_line + 1,
+				line: h.source_line,
 				severity: 'warning',
-				message: `empty section "${k.text}"`,
+				message: `empty section "${h.text}"`,
 			})
 		}
 	}
@@ -160,75 +201,67 @@ function check_no_empty_sections(manifest: Manifest): LintMessage[] {
 //      reported — that is the root of the duplication chain.
 // Both checks run for every non-empty heading and can fire together on the same line.  Empty
 // titles are skipped (already covered by `check_no_empty_heading_titles`).
-function check_no_duplicate_headings(manifest: Manifest): LintMessage[] {
+function check_no_duplicate_headings(entry_headings: EntryHeadings[]): LintMessage[] {
 	const messages: LintMessage[] = []
-	for (const entry of manifest) {
-		if (typeof entry.target_content !== 'string') {
-			continue
-		}
-		const body_start = get_body_start_line(entry)
-		const lines = entry.target_content.split('\n')
-		const kinds = classify_lines(lines.slice(body_start))
+	for (const {entry, headings} of entry_headings) {
 		// Stack tracks ancestors of the current heading.  The synthetic root frame at level 0
-		// (text='', line=-1) holds top-level headings as siblings; each real frame stores the
-		// heading's own text and body-relative line index for ancestor-match lookup, plus a
-		// children_seen map of `${level}|${text}` → first-occurrence body-relative index for
-		// sibling duplicate detection.  first_index is preserved (not overwritten) so all
-		// later duplicates point back to the same first sibling.
+		// holds top-level headings as siblings; each real frame stores the heading's own text
+		// and source line for ancestor-match lookup, plus a `children_seen` map of
+		// `${level}|${text}` → first-occurrence source line for sibling duplicate detection.
+		// The first source line is preserved (not overwritten) so all later duplicates point
+		// back to the same first sibling.
 		const stack: {
 			level: number
 			text: string
-			line: number
+			source_line: number
 			children_seen: Map<string, number>
-		}[] = [{level: 0, text: '', line: -1, children_seen: new Map()}]
-		for (let i = 0; i < kinds.length; i++) {
-			const k = kinds[i]
-			// Skip non-heading lines and empty headings — the latter are reported by
-			// check_no_empty_heading_titles.
-			if (k.kind !== 'heading' || k.text === '') {
+		}[] = [{level: 0, text: '', source_line: -1, children_seen: new Map()}]
+		for (const h of headings) {
+			// Empty headings are reported by check_no_empty_heading_titles and never considered
+			// duplicates.
+			if (h.text === '') {
 				continue
 			}
 			// Unwind frames that aren't proper ancestors of this heading (same or deeper
 			// level) so the top becomes its direct parent.
-			while (stack[stack.length - 1].level >= k.level) {
+			while (stack[stack.length - 1].level >= h.level) {
 				stack.pop()
 			}
-			const target_line = body_start + i
-			const source_line = entry.line_map?.[target_line] ?? target_line
 			// Sibling duplicate
 			const parent = stack[stack.length - 1]
-			const key = `${k.level}|${k.text}`
-			const first_index = parent.children_seen.get(key)
-			if (first_index !== undefined) {
-				const first_target = body_start + first_index
-				const first_source = entry.line_map?.[first_target] ?? first_target
+			const key = `${h.level}|${h.text}`
+			const first_source_line = parent.children_seen.get(key)
+			if (first_source_line !== undefined) {
 				messages.push({
 					file: entry.source_name,
-					line: source_line + 1,
+					line: h.source_line,
 					severity: 'warning',
-					message: `duplicate heading "${k.text}" (also at line ${first_source + 1})`,
+					message: `duplicate heading "${h.text}" (also at line ${first_source_line})`,
 				})
 			} else {
-				parent.children_seen.set(key, i)
+				parent.children_seen.set(key, h.source_line)
 			}
 			// Ancestor match: walk outward to inward (j=1 is the outermost real frame), report
 			// the first match — the root of the duplication chain.
 			for (let j = 1; j < stack.length; j++) {
-				if (stack[j].text === k.text) {
-					const ancestor_target = body_start + stack[j].line
-					const ancestor_source = entry.line_map?.[ancestor_target] ?? ancestor_target
+				if (stack[j].text === h.text) {
 					messages.push({
 						file: entry.source_name,
-						line: source_line + 1,
+						line: h.source_line,
 						severity: 'warning',
 						message:
-							`heading "${k.text}" duplicates an ancestor `
-							+ `(also at line ${ancestor_source + 1})`,
+							`heading "${h.text}" duplicates an ancestor `
+							+ `(also at line ${stack[j].source_line})`,
 					})
 					break
 				}
 			}
-			stack.push({level: k.level, text: k.text, line: i, children_seen: new Map()})
+			stack.push({
+				level: h.level,
+				text: h.text,
+				source_line: h.source_line,
+				children_seen: new Map(),
+			})
 		}
 	}
 	return messages
@@ -240,28 +273,16 @@ function check_no_duplicate_headings(manifest: Manifest): LintMessage[] {
 // `### \t` — is flagged.  Independent of `check_no_empty_sections`: a title-less heading at
 // EOF emits BOTH warnings (no title AND empty section); a title-less heading followed by
 // content emits only this one.
-function check_no_empty_heading_titles(manifest: Manifest): LintMessage[] {
+function check_no_empty_heading_titles(entry_headings: EntryHeadings[]): LintMessage[] {
 	const messages: LintMessage[] = []
-	for (const entry of manifest) {
-		if (typeof entry.target_content !== 'string') {
-			continue
-		}
-		const body_start = get_body_start_line(entry)
-		const lines = entry.target_content.split('\n')
-		const kinds = classify_lines(lines.slice(body_start))
-		for (let i = 0; i < kinds.length; i++) {
-			const k = kinds[i]
-			if (k.kind !== 'heading') {
+	for (const {entry, headings} of entry_headings) {
+		for (const h of headings) {
+			if (h.text !== '') {
 				continue
 			}
-			if (k.text !== '') {
-				continue
-			}
-			const target_line = body_start + i
-			const source_line = entry.line_map?.[target_line] ?? target_line
 			messages.push({
 				file: entry.source_name,
-				line: source_line + 1,
+				line: h.source_line,
 				severity: 'warning',
 				message: 'empty heading title',
 			})
@@ -279,46 +300,34 @@ function check_no_empty_heading_titles(manifest: Manifest): LintMessage[] {
 // body is deeper than level 1" case gets distinct phrasing because there is no real
 // predecessor.  Multi-level skips report a compact range (`2-4`); single skips report a
 // single number (`2`).
-function check_no_skipped_heading_levels(manifest: Manifest): LintMessage[] {
+function check_no_skipped_heading_levels(entry_headings: EntryHeadings[]): LintMessage[] {
 	const messages: LintMessage[] = []
-	for (const entry of manifest) {
-		if (typeof entry.target_content !== 'string') {
-			continue
-		}
-		const body_start = get_body_start_line(entry)
-		const lines = entry.target_content.split('\n')
-		const kinds = classify_lines(lines.slice(body_start))
+	for (const {entry, headings} of entry_headings) {
 		let prev_level = 0
-		for (let i = 0; i < kinds.length; i++) {
-			const k = kinds[i]
-			if (k.kind !== 'heading') {
-				continue
-			}
-			const target_line = body_start + i
-			const source_line = entry.line_map?.[target_line] ?? target_line
-			if (prev_level === 0 && k.level > 1) {
+		for (const h of headings) {
+			if (prev_level === 0 && h.level > 1) {
 				messages.push({
 					file: entry.source_name,
-					line: source_line + 1,
+					line: h.source_line,
 					severity: 'warning',
-					message: `first heading is level ${k.level}, expected level 1`,
+					message: `first heading is level ${h.level}, expected level 1`,
 				})
-			} else if (k.level > prev_level + 1) {
+			} else if (h.level > prev_level + 1) {
 				const skip_start = prev_level + 1
-				const skip_end = k.level - 1
+				const skip_end = h.level - 1
 				const range = skip_start === skip_end
 					? String(skip_start)
 					: `${skip_start}-${skip_end}`
 				messages.push({
 					file: entry.source_name,
-					line: source_line + 1,
+					line: h.source_line,
 					severity: 'warning',
 					message:
-						`heading level ${k.level} follows level ${prev_level}, `
+						`heading level ${h.level} follows level ${prev_level}, `
 						+ `skipping ${range}`,
 				})
 			}
-			prev_level = k.level
+			prev_level = h.level
 		}
 	}
 	return messages
@@ -415,15 +424,16 @@ function check_frontmatter(entry: ManifestEntry, skill_dir_name: string): LintMe
 function lint_manifest(skill_dir: string, manifest: Manifest): LintMessage[] {
 	const skill_dir_name = basename(skill_dir)
 	const skill_md_entry = manifest.find(e => e.target_name === 'SKILL.md')
+	const entry_headings = extract_headings(manifest)
 	return [
 		...check_skill_md_exists(skill_dir, manifest),
 		...check_no_conflicts(skill_dir, manifest),
 		...check_no_unclosed_comments(manifest),
 		...check_no_unclosed_fences(manifest),
-		...check_no_empty_sections(manifest),
-		...check_no_empty_heading_titles(manifest),
-		...check_no_duplicate_headings(manifest),
-		...check_no_skipped_heading_levels(manifest),
+		...check_no_empty_sections(entry_headings),
+		...check_no_empty_heading_titles(entry_headings),
+		...check_no_duplicate_headings(entry_headings),
+		...check_no_skipped_heading_levels(entry_headings),
 		...check_no_empty_files(manifest),
 		...(skill_md_entry != null ? check_frontmatter(skill_md_entry, skill_dir_name) : []),
 		...(skill_md_entry != null ? check_empty_body(skill_md_entry) : []),

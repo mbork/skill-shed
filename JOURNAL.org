@@ -703,6 +703,33 @@ Lint skill files for common errors before deployment.
 - Decisions: NONE (all logged mid-session)
 
 ** Decisions
+*** [2026-05-29] – Extract =extract_headings= helper; share parsed heading data across the four heading checks
+**** Reason
+Reverses the earlier =[2026-05-27]= decision to defer this refactor.  Two intervening
+changes made the per-check boilerplate even more obvious as duplication: (a) the
+=get_body_start_line= helper plus the gate-on-=SKILL.md= bug fix, and (b) the
+=classify_lines(string[])= signature change.  After both, every heading check opened
+with the same four-line preamble — entry-type guard, body-start lookup, split, classify
+— before doing its own work.  Extracting =extract_headings(manifest): EntryHeadings[]=
+runs this preamble once, plus the per-heading =line_map= translation and the
+=is_section_empty= scan; the four checks become symmetric iterators over
+=HeadingInfo[]= records carrying =level=, =text=, 1-based =source_line=, and
+=is_section_empty=.  Tests are integration-style (=run_lint=) so they survive the
+signature change unchanged; coverage held at 100%.
+**** Alternatives considered
+- Put =HeadingInfo[]= on =ManifestEntry= itself (rejected as a layering violation —
+  manifest already carries derivatives of comment/fence parsing because those are
+  unavoidable byproducts of =strip_html_comments=, but heading parsing is purely a lint
+  concern and =deploy= would pay the cost for no benefit; assessed via =/assess=).
+- Include =body_line= on =HeadingInfo= so =check_no_empty_sections= could call
+  =is_section_empty(kinds, h.body_line, h.level)= itself (rejected in favor of
+  precomputing =is_section_empty= once in =extract_headings=, which lets
+  =EntryHeadings= drop both =kinds= and =body_start= from its public surface).
+- Name the function =classify_entries= / type =ClassifiedEntry= (rejected: the function
+  does not categorize entries — every string-content entry gets the same treatment.  It
+  extracts each entry's headings; =extract_headings= / =EntryHeadings= names what it
+  actually does).
+
 *** [2026-05-27] – Empty-titled headings are NOT transparent to =check_no_skipped_heading_levels=
 **** Reason
 A =###= line is structurally a level-3 heading regardless of title text; the document
