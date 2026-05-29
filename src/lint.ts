@@ -384,6 +384,41 @@ function check_empty_body(entry: ManifestEntry): LintMessage[] {
 	}]
 }
 
+// * check_body_length
+// Severity: warning.  Caller (lint_manifest) filters for SKILL.md.  Body is everything
+// after `body_start_line` — same region check_empty_body and check_no_empty_sections
+// inspect.  Length is measured AFTER `.trim()`, mirroring check_empty_body and
+// check_no_empty_files: surrounding whitespace (a trailing newline added by the author's
+// editor, leading blank lines after the closing `---`) is editor noise, not real body
+// content, and the 20000-char threshold is approximate enough (~5000 tokens at 4
+// chars/token) that ±10 chars from trim is below the noise floor.  Reported at the first
+// body line (translated via line_map for .source.md) — same convention as
+// check_empty_body, since this is a body-level concern.
+const SKILL_BODY_MAX = 20000
+const PROGRESSIVE_DISCLOSURE_URL = 'https://agentskills.io/specification#progressive-disclosure'
+
+function check_body_length(entry: ManifestEntry): LintMessage[] {
+	const target = entry.target_content as string
+	const body_start = get_body_start_line(entry)
+	const lines = target.split('\n')
+	const body = lines.slice(body_start).join('\n')
+	const trimmed_length = body.trim().length
+	if (trimmed_length <= SKILL_BODY_MAX) {
+		return []
+	}
+	const approx_tokens = SKILL_BODY_MAX / 4
+	const source_line = entry.line_map?.[body_start] ?? body_start
+	return [{
+		file: entry.source_name,
+		line: source_line + 1,
+		severity: 'warning',
+		message:
+			`body length (${trimmed_length} chars) exceeds the ${SKILL_BODY_MAX}-character `
+			+ `recommended maximum (~${approx_tokens} tokens at 4 chars/token); `
+			+ `see ${PROGRESSIVE_DISCLOSURE_URL}`,
+	}]
+}
+
 // * check_frontmatter
 const FRONTMATTER_SPEC_URL = 'https://agentskills.io/specification#frontmatter'
 
@@ -437,6 +472,7 @@ function lint_manifest(skill_dir: string, manifest: Manifest): LintMessage[] {
 		...check_no_empty_files(manifest),
 		...(skill_md_entry != null ? check_frontmatter(skill_md_entry, skill_dir_name) : []),
 		...(skill_md_entry != null ? check_empty_body(skill_md_entry) : []),
+		...(skill_md_entry != null ? check_body_length(skill_md_entry) : []),
 	]
 }
 

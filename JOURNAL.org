@@ -588,7 +588,7 @@ Lint skill files for common errors before deployment.
 ** Blocked by
 - [[*Preserve line numbers while comment stripping]]
 
-** Steps [11/16]
+** Steps [13/16]
 - [X] Check that `SKILL.md` exists (error)
 - [X] Check for conflicting source files (two files resolving to the same target name) (error)
 - [X] Check for unclosed HTML comments (error); report file + line number
@@ -625,9 +625,10 @@ Lint skill files for common errors before deployment.
   single number or =M+1-N-1= form; first-heading-at-top-of-body uses distinct phrasing
   =first heading is level <N>, expected level 1=.  Empty-titled headings count
   normally — they can both trigger and predecess skipped-level warnings.
-- [ ] Error if =description= exceeds 1024 characters (agentskills.io spec hard limit, see
-  https://agentskills.io/specification#frontmatter)
-- [ ] Warning if =SKILL.md= body exceeds 20000 characters (~5000 tokens at 4 chars/token);
+- [X] Error if =description= exceeds 1024 characters (agentskills.io spec hard limit, see
+  https://agentskills.io/specification#frontmatter) — already shipped as part of step 5
+  (frontmatter validation); =validate_description_field= enforces =DESCRIPTION_MAX = 1024=
+- [X] Warning if =SKILL.md= body exceeds 20000 characters (~5000 tokens at 4 chars/token);
   message must cite https://agentskills.io/specification#progressive-disclosure and state
   the approximation explicitly
 - [ ] Warn on files in the skill directory not referenced anywhere in =SKILL.md= (warning:

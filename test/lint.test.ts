@@ -1673,6 +1673,107 @@ test('lint: empty SKILL.md reports body-empty, not file-empty', async () => {
 	assert.match(result.stdout, /body is empty/)
 })
 
+// ** SKILL.md body length
+
+test('lint: SKILL.md body of exactly 20000 chars is silent (boundary)', async () => {
+	// Trailing empty array element produces a final `\n` (real-file convention); body
+	// length is measured after `.trim()`, so the trailing newline does not push us over.
+	const skill_dir = await make_skill_dir()
+	const content = [
+		'---',
+		'name: my-skill',
+		'description: Test skill.',
+		'---',
+		'a'.repeat(20000),
+		'',
+	].join('\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), content)
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, '')
+})
+
+test('lint: SKILL.md body of 20001 chars warns with full message', async () => {
+	const skill_dir = await make_skill_dir()
+	const content = [
+		'---',
+		'name: my-skill',
+		'description: Test skill.',
+		'---',
+		'a'.repeat(20001),
+		'',
+	].join('\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), content)
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(
+		result.stdout,
+		'SKILL.md:5: warning: body length (20001 chars) exceeds the 20000-character '
+		+ 'recommended maximum (~5000 tokens at 4 chars/token); '
+		+ 'see https://agentskills.io/specification#progressive-disclosure\n',
+	)
+})
+
+test('lint: body length is measured after trim (surrounding whitespace does not count)',
+	async () => {
+		// Raw body is ~20200 chars (100 leading newlines + 20000 a's + 100 trailing
+		// newlines), but after `.trim()` it is 20000 chars → silent.  Locks in the trim
+		// semantic so a future change to "measure raw chars" would be caught here.
+		const skill_dir = await make_skill_dir()
+		const padding = '\n'.repeat(100)
+		const content = [
+			'---',
+			'name: my-skill',
+			'description: Test skill.',
+			'---',
+			padding + 'a'.repeat(20000) + padding,
+		].join('\n')
+		await writeFile(join(skill_dir, 'SKILL.md'), content)
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.strictEqual(result.stdout, '')
+	})
+
+test('lint: SKILL.source.md body-length warning reports the source line via line_map',
+	async () => {
+		// Triggers the warning on a .source.md so the line_map lookup is exercised (the
+		// SKILL.md case above hits the `?? body_start` fallback because line_map is
+		// undefined for .md files).
+		const skill_dir = await make_skill_dir()
+		const content = FRONTMATTER + '<!-- a comment, stripped -->\n' + 'a'.repeat(20001) + '\n'
+		await writeFile(join(skill_dir, 'SKILL.source.md'), content)
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.match(
+			result.stdout,
+			/^SKILL\.source\.md:\d+: warning: body length \(20001 chars\) exceeds /,
+		)
+	})
+
+test('lint: SKILL.source.md body length is computed on stripped content', async () => {
+	// Dramatic ratio: a 30000-char HTML comment (well above the 20000 threshold) plus a
+	// tiny real body.  If the check operated on source_content instead of target_content,
+	// it would trip on the comment.  Silent verifies that the strip pipeline's output
+	// (target_content) is what gets measured.
+	const skill_dir = await make_skill_dir()
+	const huge_comment = `<!-- ${'x'.repeat(30000)} -->`
+	const real_body = '# Skill\n\nA tiny body.\n'
+	await writeFile(join(skill_dir, 'SKILL.source.md'), FRONTMATTER + huge_comment + '\n' + real_body)
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, '')
+})
+
 // ** Manifest source errors
 
 test('lint: non-ENOENT error reading .env is reported via catch block', async () => {
