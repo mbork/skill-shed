@@ -637,6 +637,32 @@ Lint skill files for common errors before deployment.
   replace =validate_manifest= calls with the lint pass and delete =validate_manifest=
 
 ** Session log
+*** [2026-05-29]
+- Completed: step 7 (=check_no_skipped_heading_levels=, ~10 integration tests); step 11
+  (description length cap — already shipped as part of step 5, just checked off); step 12
+  (=check_body_length= with =.trim()= semantic, cites progressive-disclosure spec, reports
+  at first body line via =line_map=, 5 integration tests); bug fix — only skip frontmatter
+  region for =SKILL.md= (non-=SKILL.md= files starting with =---= had content hidden as
+  fake frontmatter); three refactors — =classify_lines(string[])= avoiding split→join→split,
+  drop unused =FrontmatterResult.body= field (replaced 3 test assertions with
+  =body_start_line= checks), =extract_headings(manifest): EntryHeadings[]= consolidating
+  the four heading checks' preamble + the =line_map= translation + the
+  =is_section_empty= scan; Skill linting now [13/16]; coverage holds at 100% across
+  statements/branches/functions/lines; 96 tests pass
+- In progress: NONE
+- Next: step 6 (URL checking with =--check-urls=), step 14 (unreferenced files), the
+  =Restructure LintMessage= top-of-file TODO (should precede deploy integration), or
+  step 16 (wire lint into deploy) — choose at next session start
+- Blockers: NONE
+- Decisions: empty-titled headings count normally for skipped-level check (NOT
+  transparent); range form =M+1-N-1= for multi-skips, distinct top-of-body phrasing;
+  reverse the [2026-05-27] defer decision and extract =extract_headings= same session;
+  =extract_headings= / =EntryHeadings= over =classify_entries= / =ClassifiedEntry= (the
+  function does not categorize entries); reject putting heading data on =ManifestEntry=
+  (layering violation, assessed via =/assess=); =.trim()= body length to match
+  =check_empty_body=; long-line warning rejected (legitimate soft-wrap defeats the
+  heuristic)
+
 *** [2026-05-26]
 - Completed: four lint checks wired into =lint_manifest=: =check_empty_body= (SKILL.md
   body empty after =body_start_line=, runs regardless of frontmatter health, reports first
