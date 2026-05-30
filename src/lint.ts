@@ -368,6 +368,76 @@ function check_no_empty_files(manifest: Manifest): LintMessage[] {
 	return messages
 }
 
+// * is_file_referenced
+// True when `filename` appears in `content` as a standalone token, distinguishing a
+// *punctuation* dot (sentence-ending — "see guide.md.") from a *structural* dot (joins more
+// filename — "guide.md.bak", a different file).  The pattern is:
+//
+//   (?<![\w.-]) NAME (?=\.*(?![\w.-]))
+//
+//   (?<![\w.-])  left boundary: the char before NAME must not be a filename-stem char (word
+//                char, `.`, or `-`), so `guide.md` is not matched inside `v2.guide.md` or
+//                `old-guide.md`.
+//   NAME         the escaped filename (RegExp.escape handles `+`, `.`, etc.).
+//   (?=\.*       right boundary lookahead: optionally consume a run of trailing dots — these
+//                are punctuation (`.`, `...`) only if what follows is also a boundary...
+//        (?![\w.-]))  ...so after the dot-run the next char must not be a filename-stem char
+//                (or be end-of-string).  This rejects `guide.md.bak` / `guide.md...bak` (dots
+//                resolve into more filename) while accepting `guide.md`, `guide.md.`,
+//                `guide.md...`, and `(guide.md)`.
+//
+// Exported for direct unit testing of the boundary behavior.
+export function is_file_referenced(filename: string, content: string): boolean {
+	// @ts-expect-error RegExp.escape is a Stage 3 proposal, not yet in any TypeScript lib
+	const pattern = `(?<![\\w.-])${RegExp.escape(filename)}(?=\\.*(?![\\w.-]))`
+	const reference_re = new RegExp(pattern)
+	return reference_re.test(content)
+}
+
+// * check_unreferenced_files
+// Severity: warning.  Flags every manifest entry not reachable from SKILL.md through a
+// chain of filename references.  Reachability is transitive: SKILL.md -> guide.md ->
+// details.md keeps details.md even though SKILL.md never names it directly.  Only the
+// deployed `target_name` counts (`source_name` is irrelevant: the runtime agent sees
+// deployed names, and lint runs over deployed content).  Only string content can
+// reference others; binary entries (Buffer `target_content`) are traversal leaves —
+// they can be reached but are never scanned for outgoing references.
+function check_unreferenced_files(
+	manifest: Manifest,
+	skill_md_entry: ManifestEntry,
+): LintMessage[] {
+	const reached = new Set<ManifestEntry>([skill_md_entry])
+	const queue: ManifestEntry[] = [skill_md_entry]
+	while (queue.length > 0) {
+		const current = queue.shift()!
+		if (typeof current.target_content !== 'string') {
+			continue
+		}
+		for (const entry of manifest) {
+			if (reached.has(entry)) {
+				continue
+			}
+			if (is_file_referenced(entry.target_name, current.target_content)) {
+				reached.add(entry)
+				queue.push(entry)
+			}
+		}
+	}
+	const messages: LintMessage[] = []
+	for (const entry of manifest) {
+		if (reached.has(entry)) {
+			continue
+		}
+		messages.push({
+			file: entry.source_name,
+			line: 0,
+			severity: 'warning',
+			message: 'file not referenced from SKILL.md',
+		})
+	}
+	return messages
+}
+
 // * check_empty_body
 // Severity: warning.  Body is everything after `body_start_line` — the same region
 // `check_no_empty_sections` inspects.  Runs regardless of frontmatter health: a file with
@@ -477,6 +547,7 @@ function lint_manifest(skill_dir: string, manifest: Manifest): LintMessage[] {
 		...check_no_duplicate_headings(entry_headings),
 		...check_no_skipped_heading_levels(entry_headings),
 		...check_no_empty_files(manifest),
+		...(skill_md_entry != null ? check_unreferenced_files(manifest, skill_md_entry) : []),
 		...(skill_md_entry != null ? check_frontmatter(skill_md_entry, skill_dir_name) : []),
 		...(skill_md_entry != null ? check_empty_body(skill_md_entry) : []),
 		...(skill_md_entry != null ? check_body_length(skill_md_entry) : []),

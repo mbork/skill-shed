@@ -706,7 +706,7 @@ test('lint: multiple empty sections in one file produce multiple warnings', asyn
 
 test('lint: empty section in a non-SKILL.md file is flagged', async () => {
 	const skill_dir = await make_skill_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody.\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody, see reference.md.\n')
 	await writeFile(join(skill_dir, 'reference.md'), '# Empty section\n')
 
 	const result = await run_lint(skill_dir)
@@ -726,7 +726,7 @@ test('lint: non-SKILL.md file starting with `---` is not skipped as frontmatter'
 	// would then be reported as "first heading is level 3, expected level 1".  With the
 	// fix, `# Aqq` is visible and `### Bęc` correctly fires the skipped-level warning.
 	const skill_dir = await make_skill_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody.\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody, see reference.md.\n')
 	await writeFile(join(skill_dir, 'reference.md'), [
 		'---',
 		'# Aqq',
@@ -1620,7 +1620,7 @@ test('lint: skipped-level warning in .source.md reports source lines via line_ma
 
 test('lint: empty non-SKILL.md file is a warning', async () => {
 	const skill_dir = await make_skill_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody.\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody, see reference.md.\n')
 	await writeFile(join(skill_dir, 'reference.md'), '')
 
 	const result = await run_lint(skill_dir)
@@ -1631,7 +1631,7 @@ test('lint: empty non-SKILL.md file is a warning', async () => {
 
 test('lint: whitespace-only non-SKILL.md file is a warning', async () => {
 	const skill_dir = await make_skill_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody.\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody, see reference.md.\n')
 	await writeFile(join(skill_dir, 'reference.md'), '   \n\t\n\n')
 
 	const result = await run_lint(skill_dir)
@@ -1642,7 +1642,7 @@ test('lint: whitespace-only non-SKILL.md file is a warning', async () => {
 
 test('lint: .source.md whose target is empty after stripping is a warning', async () => {
 	const skill_dir = await make_skill_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody.\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody, see reference.md.\n')
 	await writeFile(join(skill_dir, 'reference.source.md'), '<!-- only a comment -->\n')
 
 	const result = await run_lint(skill_dir)
@@ -1653,7 +1653,7 @@ test('lint: .source.md whose target is empty after stripping is a warning', asyn
 
 test('lint: empty binary (non-.md) file is a warning', async () => {
 	const skill_dir = await make_skill_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody.\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody, see asset.bin.\n')
 	await writeFile(join(skill_dir, 'asset.bin'), Buffer.alloc(0))
 
 	const result = await run_lint(skill_dir)
@@ -1671,6 +1671,179 @@ test('lint: empty SKILL.md reports body-empty, not file-empty', async () => {
 	assert.strictEqual(result.code, 1)
 	assert.doesNotMatch(result.stdout, /file is empty/)
 	assert.match(result.stdout, /body is empty/)
+})
+
+// ** Unreferenced files
+
+test('lint: companion file referenced in SKILL.md is not flagged', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nSee guide.md.\n')
+	await writeFile(join(skill_dir, 'guide.md'), '# Guide\n\nContent.\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), '')
+})
+
+test('lint: companion file not referenced in SKILL.md is a warning', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody.\n')
+	await writeFile(join(skill_dir, 'guide.md'), '# Guide\n\nContent.\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, 'guide.md:0: warning: file not referenced from SKILL.md\n')
+})
+
+test('lint: transitively referenced file is not flagged', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nSee guide.md.\n')
+	await writeFile(join(skill_dir, 'guide.md'), '# Guide\n\nSee details.md.\n')
+	await writeFile(join(skill_dir, 'details.md'), '# Details\n\nContent.\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), '')
+})
+
+test('lint: a chain reachable only from an orphan is flagged entirely', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody.\n')
+	await writeFile(join(skill_dir, 'orphan.md'), '# Orphan\n\nSee secret.md.\n')
+	await writeFile(join(skill_dir, 'secret.md'), '# Secret\n\nContent.\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, [
+		'orphan.md:0: warning: file not referenced from SKILL.md',
+		'secret.md:0: warning: file not referenced from SKILL.md',
+		'',
+	].join('\n'))
+})
+
+test('lint: a reference cycle reachable from SKILL.md is not flagged', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nSee aqq.md.\n')
+	await writeFile(join(skill_dir, 'aqq.md'), '# Aqq\n\nSee bec.md.\n')
+	await writeFile(join(skill_dir, 'bec.md'), '# Bec\n\nSee aqq.md.\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), '')
+})
+
+test('lint: a binary asset referenced from a reachable file is not flagged', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nSee guide.md.\n')
+	await writeFile(join(skill_dir, 'guide.md'), '# Guide\n\n![](diagram.png)\n')
+	await writeFile(join(skill_dir, 'diagram.png'), Buffer.from([1, 2, 3]))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), '')
+})
+
+test('lint: an unreferenced binary asset is flagged', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nBody.\n')
+	await writeFile(join(skill_dir, 'diagram.png'), Buffer.from([1, 2, 3]))
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(
+		result.stdout,
+		'diagram.png:0: warning: file not referenced from SKILL.md\n',
+	)
+})
+
+test('lint: a .source.md reached via its deployed name is not flagged', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nSee guide.md.\n')
+	await writeFile(join(skill_dir, 'guide.source.md'), '# Guide\n\nContent.\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), '')
+})
+
+test('lint: a .source.md mentioned only by its source name is flagged', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nSee guide.source.md.\n')
+	await writeFile(join(skill_dir, 'guide.source.md'), '# Guide\n\nContent.\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(
+		result.stdout,
+		'guide.source.md:0: warning: file not referenced from SKILL.md\n',
+	)
+})
+
+test('lint: a filename that is only a substring of another mention is still flagged', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + '# Skill\n\nSee metadata.md.\n')
+	await writeFile(join(skill_dir, 'metadata.md'), '# Metadata\n\nContent.\n')
+	await writeFile(join(skill_dir, 'data.md'), '# Data\n\nContent.\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, 'data.md:0: warning: file not referenced from SKILL.md\n')
+})
+
+test('lint: SKILL.source.md referencing a companion file does not flag it', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.source.md'), FRONTMATTER + '# Skill\n\nSee guide.md.\n')
+	await writeFile(join(skill_dir, 'guide.md'), '# Guide\n\nContent.\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), '')
+})
+
+test('lint: a reference only inside a stripped comment is flagged', async () => {
+	// The reference to guide.md lives inside an HTML comment that is stripped on deploy, so
+	// the deployed SKILL.md no longer mentions it.  The check operates on deployed content,
+	// so guide.md is (correctly) flagged as unreferenced.
+	const skill_dir = await make_skill_dir()
+	await writeFile(
+		join(skill_dir, 'SKILL.source.md'),
+		FRONTMATTER + '# Skill\n\nBody.\n\n<!-- See guide.md for details. -->\n',
+	)
+	await writeFile(join(skill_dir, 'guide.md'), '# Guide\n\nContent.\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout, 'guide.md:0: warning: file not referenced from SKILL.md\n')
+})
+
+test('lint: a reference inside a fenced code block counts', async () => {
+	const skill_dir = await make_skill_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + [
+		'# Skill',
+		'',
+		'```',
+		'cat guide.md',
+		'```',
+		'',
+	].join('\n'))
+	await writeFile(join(skill_dir, 'guide.md'), '# Guide\n\nContent.\n')
+
+	const result = await run_lint(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.strictEqual(result.stdout.trim(), '')
 })
 
 // ** SKILL.md body length

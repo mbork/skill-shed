@@ -625,7 +625,7 @@ Lint skill files for common errors before deployment.
 ** Blocked by
 - [[*Preserve line numbers while comment stripping]]
 
-** Steps [13/16]
+** Steps [14/16]
 - [X] Check that `SKILL.md` exists (error)
 - [X] Check for conflicting source files (two files resolving to the same target name) (error)
 - [X] Check for unclosed HTML comments (error); report file + line number
@@ -668,8 +668,10 @@ Lint skill files for common errors before deployment.
 - [X] Warning if =SKILL.md= body exceeds 20000 characters (~5000 tokens at 4 chars/token);
   message must cite https://agentskills.io/specification#progressive-disclosure and state
   the approximation explicitly
-- [ ] Warn on files in the skill directory not referenced anywhere in =SKILL.md= (warning:
-  "file not referenced in SKILL.md")
+- [X] Warn on files in the skill directory not referenced anywhere in =SKILL.md= (warning:
+  "file not referenced from =SKILL.md="); reachability is transitive (=SKILL.md= -> A -> B
+  keeps B); match the deployed =target_name= only; boundary-aware so =data.md= is not matched
+  inside =metadata.md=
 - [ ] Wire lint error checks into =deploy=: pass the already-built manifest to =lint_manifest=;
   replace =validate_manifest= calls with the lint pass and delete =validate_manifest=
 
@@ -767,6 +769,28 @@ Lint skill files for common errors before deployment.
 - Decisions: NONE (all logged mid-session)
 
 ** Decisions
+*** [2026-05-30] – Tighten =is_file_referenced= boundary: allow a trailing dot-run, reject filename-joining dots
+**** Reason
+The first cut of =is_file_referenced= used =(?<![\w-])name(?![\w-])=, which permits any
+non-word, non-hyphen char (including =.=) on either side.  That correctly lets a filename end
+a sentence (=see guide.md.=) but also produces false positives: =guide.md.bak= (a different,
+double-extension file) and =v2.guide.md= (=guide.md= as a suffix of a longer name) would both
+count =guide.md= as referenced.  Decision: distinguish a /punctuation/ dot (sentence-ending —
+followed by whitespace, EOS, or other non-filename char) from a /structural/ dot (joins more
+filename chars).  New pattern: =(?<![\w.-])name(?=\.*(?![\w.-]))=.  Lookbehind now also
+forbids a leading =.= (closes =v2.guide.md=); the lookahead optionally consumes a run of
+trailing dots (=\.*=) and then requires a non-filename char (closes =guide.md.bak=, keeps
+=guide.md.= and the =guide.md...= ellipsis).
+**** Alternatives considered
+- =\.?= (single optional dot) instead of =\.*=: rejected — an ellipsis (=guide.md...=) would
+  fail.  =\.*= is no worse on false positives (a dot-run must still be followed by a
+  non-filename char) and handles ellipsis, so it strictly dominates.
+- Leave the loose =(?![\w-])= as-is: the false positives are double-extension / dotted-prefix
+  companions, rare, and the failure mode is a /missed/ warning, not a false alarm — but the
+  tighter form costs nothing and removes a documented sharp edge, so it is worth doing.
+- TDD: the boundary tests were written first (red) in =test/is-file-referenced.test.ts= before
+  the regex change; the implementation comment must spell the regex out thoroughly but
+  concisely.
 *** [2026-05-29] – Extract =extract_headings= helper; share parsed heading data across the four heading checks
 **** Reason
 Reverses the earlier =[2026-05-27]= decision to defer this refactor.  Two intervening
