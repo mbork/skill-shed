@@ -676,6 +676,28 @@ Lint skill files for common errors before deployment.
   replace =validate_manifest= calls with the lint pass and delete =validate_manifest=
 
 ** Session log
+*** [2026-05-30] (session 12)
+- Completed: step 14 — =check_unreferenced_files= (commit =d07a943=): BFS reachability from
+  =SKILL.md= over the filename-reference graph — transitive, cycle-safe, orphan chains flagged
+  in full, binary entries are traversal leaves; matches the deployed =target_name= only.
+  Matching via new exported pure helper =is_file_referenced=, whose boundary regex was
+  tightened TDD-first from =(?<![\w-])name(?![\w-])= to =(?<![\w.-])name(?=\.*(?![\w.-]))=: a
+  trailing dot-run is sentence punctuation (=guide.md.=, ellipsis still count) but
+  =guide.md.bak=, =v2.guide.md=, =old-guide.md= no longer false-match.  Also =reference?:
+  string= field on =LintMessage= (commit =4c043d6=), rendered as trailing =(see ...)= by
+  =format_lint_message=, replacing =with_spec_ref()=; =category= discriminator rejected as
+  YAGNI.  Integration tests cover direct/transitive/orphan/cycle/binary/source-name/boundary/
+  comment-stripping/code-fence; unit tests in new =test/is-file-referenced.test.ts=.  Full
+  suite 437 pass; =lint.ts= coverage 100%.  Skill linting now [14/16].
+- In progress: NONE
+- Next: step 16 (wire lint into =deploy=; replace/delete =validate_manifest=) or step 6
+  (=--check-urls=).  Pending: =README-REVIEW.md= (untracked) — a background agent wrote a plan
+  to apply the review to =README.org= but stopped for a decision on the =allowed-tools= comma
+  form; not yet applied.
+- Blockers: NONE
+- Decisions: transitive reachability from =SKILL.md=; =target_name= only (=source_name=
+  irrelevant); boundary-aware matching with =\.*= dot-run (over =\.?=, so ellipses count);
+  binary files are leaves; =reference?= field over =category= (all logged under Decisions)
 *** [2026-05-29] (session 11)
 - Completed: step 7 (=check_no_skipped_heading_levels=, ~10 integration tests); step 11
   (description length cap — already shipped as part of step 5, just checked off); step 12
