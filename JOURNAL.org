@@ -642,6 +642,32 @@ Lint skill files for common errors before deployment.
   - [X] Unit tests in =test/frontmatter.test.ts=; integration tests in =test/lint.test.ts=
 - [ ] Check URLs with =--check-urls= flag: follow redirects, accept final 2xx; treat 401/403
   as distinct warning ("may require auth"); treat 404/5xx/timeout/DNS failure as warning
+  - [X] New =src/check-urls.ts=.  Pure =extract_urls(content): string[]= — match =https?://=
+    runs, ending the body at whitespace or =< > " ' `= (so autolinks, inline code, and HTML
+    attributes terminate cleanly), then trim trailing punctuation (=.,;:!?]}= always; a trailing
+    =)= only when unbalanced, so a balanced path paren like =..._(programming)= survives), dedupe
+    in first-occurrence order; exported for direct unit testing.  23 unit tests; 100% coverage
+  - [ ] =check_url(url, timeout_ms): Promise<UrlStatus>= — =fetch= with =redirect: 'follow'=,
+    =method: 'HEAD'=, =AbortController= timeout; retry with =GET= on 405/501; cancel the body.
+    Classify the final response: 2xx ok; 401/403 auth; other 4xx/5xx (or a 3xx that never
+    resolved) bad-status; =fetch= rejection (timeout/DNS/conn/TLS) unreachable
+  - [ ] =check_urls(manifest, {timeout_ms}): Promise<LintMessage[]>= — collect URLs with their
+    ={file, line}= from every string =target_content=, memoize one network check per unique URL
+    (bounded concurrency), emit one =warning= per occurrence; 2xx emits nothing.  Messages:
+    "URL may require auth (HTTP 401)", "URL returned HTTP 404", "URL unreachable: <reason>".
+    Memoize on the URL MINUS its =#fragment= (fragments are client-side, never sent to the
+    server, so =.../a= and =.../a#install= are one network resource) while still reporting the
+    full URL the author wrote.
+  - [ ] Per-request timeout injectable via =SKILL_SHED_URL_TIMEOUT_MS= (default 10000), read in
+    =lint= and passed down (tests set ~100ms; see Decision)
+  - [ ] Wire the flag: add =check-urls= boolean to =parseArgs= in =src/skill-shed.ts=; thread
+    =is_check_urls= through =dispatch= into =lint(skill_dir, source, {is_check_urls})=; lint-only
+    (NOT =deploy= — URL checks are warnings, network-slow, and unexpected at deploy time).  When
+    set, =await check_urls(...)= and append its messages to those of =lint_manifest= before reporting
+  - [ ] Update =lint_help= in =src/help.ts= (=--check-urls= and =SKILL_SHED_URL_TIMEOUT_MS=)
+  - [ ] Tests — in-process local HTTP server (see Decision [2026-05-31]); route table and test
+    list are there.  Extend =run_lint= to forward =env=.  Coverage must stay 100% (no =c8 ignore=)
+  - [ ] README: document =--check-urls=, the three warning classes, and the timeout env var
 - [X] Warn on empty sections — heading with no content (warning)
 - [X] Warn on empty skill body — =SKILL.md= body returned by =extract_frontmatter= is
   empty after =.trim()= (warning)
@@ -809,6 +835,54 @@ Lint skill files for common errors before deployment.
 - Decisions: NONE (all logged mid-session)
 
 ** Decisions
+*** [2026-05-31] – Test =--check-urls= against an in-process local HTTP server; no skip-network flag
+**** Reason
+=/assess= judged the local-server approach clearly correct over the alternative ("hit real
+public URLs + a skip-network flag on =npm test="): this repo demands hermetic, deterministic
+tests and 100% coverage with no =c8 ignore=, neither of which a network-dependent/skippable
+suite can meet (third-party uptime, proxies, CI egress; and a skip path rots silently so the
+branches effectively never run).  A single =node:http= server on =127.0.0.1:0= (ephemeral
+port) with path-based routing drives every classification branch offline in milliseconds.
+Therefore we add NO skip-network flag to =npm test=.  At most ONE real-network smoke test may
+exist, gated behind =SKILL_SHED_NET_SMOKE=1= (default off), never part of =npm test= — it
+captures the alternative's only real merit (real TLS/redirect-stack validation) without
+polluting the default suite.  The one design constraint the local server forces — an
+injectable per-request timeout (=SKILL_SHED_URL_TIMEOUT_MS=) — is wanted regardless and is
+surfaced early as a plus.  Register =server.close()= / =closeAllConnections()= in an =after=
+hook so a throwing test cannot leak the listener and wedge =node --test= exit.
+**** Route table (server on =127.0.0.1:<port>=)
+- =/ok= -> 200; =/redirect= -> 302 =Location: /ok=; =/auth= -> 401; =/forbidden= -> 403;
+  =/missing= -> 404; =/boom= -> 500; =/slow= -> never responds (timeout); =/head-405= -> 405
+  on HEAD but 200 on GET (covers the HEAD->GET fallback).
+- Connection failure uses a closed port =http://127.0.0.1:1/= (no server, immediate
+  =ECONNREFUSED=) — DNS NXDOMAIN lands in the same "unreachable" bucket, so no =.invalid= host
+  is needed and the test stays fully offline.
+**** Tests
+- Unit (=test/check-urls.test.ts=, no network): =extract_urls= finds inline-link / autolink /
+  bare URLs, dedupes, strips trailing punctuation, ignores non-=http(s)=, collects across
+  multiple files with correct ={file, line}=.
+- Integration (=test/lint.test.ts=, =--check-urls= + local server): 200 -> clean lint;
+  302->200 -> clean; 401 -> auth warning; 403 -> auth warning; 404 -> warning; 500 -> warning;
+  closed port -> unreachable warning; =/slow= + short timeout -> unreachable warning;
+  =/head-405= -> clean (GET fallback); a URL in a non-=SKILL.md= file is also checked; one good
+  + one bad URL -> exactly one warning; a broken URL present but WITHOUT =--check-urls= ->
+  clean (proves opt-in); exit code 0 despite broken URLs (warnings never fail lint);
+  [optional] a duplicated URL is fetched once (assert via server request count).
+**** Open refinements (not in v1)
+- Skip URLs on reserved documentation hosts (=example.com/.org/.net=, =*.example/.test/.invalid=,
+  =localhost=) to suppress false warnings on placeholder links; =127.0.0.1= stays checked.
+- A =--url-timeout= CLI flag mirroring the env var.
+- Skip URLs inside fenced code blocks (currently checked) if placeholder noise shows up.
+**** Alternatives considered
+- Hit real public URLs (=example.com=, httpbin) + a =SKILL_SHED_SKIP_NET= flag on =npm test=:
+  rejected — non-hermetic, flaky on third-party uptime/proxies, and the skip path rots silently
+  (branches stop running in CI), incompatible with the 100%-coverage-no-ignore policy.
+- =GET=-only (drop HEAD): simpler by one branch but downloads response bodies for no lighter
+  probe; HEAD->GET-on-405/501 is the correct, still-cheap choice (one extra route + test).
+  Retry is scoped to 405/501 because those are the only codes meaning "the /method/, not the
+  /resource/, is unsupported"; 401/403 are kept as the auth warning and 404 as missing (a GET
+  would repeat both), so retrying them buys nothing.  A misconfigured server that HEAD-rejects
+  with 403/404 but GETs 200 is the accepted false-positive cost of that scoping.
 *** [2026-05-30] – Tighten =is_file_referenced= boundary: allow a trailing dot-run, reject filename-joining dots
 **** Reason
 The first cut of =is_file_referenced= used =(?<![\w-])name(?![\w-])=, which permits any
