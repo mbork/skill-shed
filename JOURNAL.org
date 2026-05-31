@@ -676,6 +676,24 @@ Lint skill files for common errors before deployment.
   replace =validate_manifest= calls with the lint pass and delete =validate_manifest=
 
 ** Session log
+*** [2026-05-31] (session 13)
+- Completed: step 16 — wire lint into =deploy=.  =deploy= now runs the full =lint_manifest=
+  (=validate_manifest= deleted): it aborts on any error-severity message and prints warnings to
+  stderr as a non-blocking heads-up.  Extracted shared =report_lint_messages(messages, stream)=
+  used by =deploy= (stderr) and =lint= (stdout); exported =lint_manifest= and
+  =check_skill_md_exists=.  Deploy tests rebuilt on a new =skill_md= test helper (valid
+  frontmatter); added tests for error-blocking (target dir stays empty on abort) and the warning
+  heads-up.  Removed =test/validate-manifest.test.ts=; added unit tests for =check_skill_md_exists=
+  (empty manifest) and =format_lint_message=.  Suite 438 pass, coverage 100%.  Now [15/16].
+- In progress: NONE
+- Next: step 6 (=--check-urls=) — the only remaining step.  Still pending: =README-REVIEW.md=
+  (untracked) not yet applied to =README.org=.
+- Blockers: NONE
+- Decisions: =deploy= blocks on ALL lint errors incl. frontmatter (a skill without valid
+  frontmatter no longer deploys), warnings print but do not block; =report_lint_messages= uses a
+  =stdout=/=stderr= discriminator with a binary if/else (an explicit =else if= would leave an
+  unreachable false-branch, breaking 100% coverage); rejected =Array.reduce= for the
+  print+error-flag loop (side effect in a pure fold).
 *** [2026-05-30] (session 12)
 - Completed: step 14 — =check_unreferenced_files= (commit =d07a943=): BFS reachability from
   =SKILL.md= over the filename-reference graph — transitive, cycle-safe, orphan chains flagged
