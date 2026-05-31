@@ -702,6 +702,22 @@ Lint skill files for common errors before deployment.
   replace =validate_manifest= calls with the lint pass and delete =validate_manifest=
 
 ** Session log
+*** [2026-05-31] (session 14)
+- Completed: planned the whole =--check-urls= feature in =JOURNAL.org= (implementation substeps;
+  the in-process local-server testing decision via =/assess=, with route table + test list; the
+  405/501 HEAD->GET retry rationale; the fragment-memo note on substep 3); implemented substep 1
+  — =src/check-urls.ts= =extract_urls= (TDD: tests-first red->green, then a second tests-first
+  pass for balanced-paren trimming), 23 unit tests, 100% coverage; substep 1 marked done.  One
+  feat commit (=a945b60=).
+- In progress: NONE
+- Next: substep 2 — =check_url= (HEAD->GET-on-405/501 network probe; injectable timeout via
+  =SKILL_SHED_URL_TIMEOUT_MS=).
+- Blockers: NONE.  Still pending (pre-existing): =README-REVIEW.md= (untracked) not yet applied
+  to =README.org=.
+- Decisions: timeout via =SKILL_SHED_URL_TIMEOUT_MS= env var, not per-skill =.env= (env/network
+  property; per-skill =.env= is machine-local/git-ignored) — user declined logging it as a formal
+  decision; balanced-paren trimming (option B), lexical no-normalization, and the private helper
+  logged above.
 *** [2026-05-31] (session 13)
 - Completed: step 16 — wire lint into =deploy=.  =deploy= now runs the full =lint_manifest=
   (=validate_manifest= deleted): it aborts on any error-severity message and prints warnings to
@@ -835,6 +851,27 @@ Lint skill files for common errors before deployment.
 - Decisions: NONE (all logged mid-session)
 
 ** Decisions
+*** [2026-05-31] – =extract_urls=: lexical extraction, balanced-paren trimming, private helper
+**** Reason
+=extract_urls(content): string[]= is a purely lexical scanner: it matches =https?://= bodies
+(terminated at whitespace or a wrapper delimiter — =<=, =>=, quotes, backtick — so autolinks,
+inline code, and HTML attributes close cleanly) and dedupes on the exact string in
+first-occurrence order, with no URL normalization.  Fragment collapsing (=.../a= vs =.../a#x=
+are one server resource) is deferred to =check_urls='s network memo key, not done here, so the
+URL reported to the author stays verbatim.  Trailing punctuation is trimmed with balanced-paren
+awareness (chosen over accepting the lossy "=..._(programming)= drops its =)=" limitation): a
+trailing =)= is removed only when the URL has more =)= than =(=, looping one =)= per pass so a
+wrapper paren goes while a balanced path paren survives.  =strip_trailing_punctuation= stays
+private — every branch is reachable from the =extract_urls= tests (100% coverage), so the
+project rule "export only for paths unreachable from higher tests" does not apply.
+**** Alternatives considered
+- Accept the trailing-=)= limitation (option A): rejected — a working Wikipedia/MDN link getting
+  a false "unreachable" warning is a trust-eroding paper-cut, and the fix is ~6 lines.
+- One-shot =slice(0, -(closes - opens))= instead of the loop: rejected — over-strips when the
+  excess =)= are not contiguous at the end (e.g. =.../a)b)= would lose the =b=); remove-one-
+  then-re-check trims only the actual trailing run.
+- Export =strip_trailing_punctuation= for direct unit tests: rejected — redundant, it is fully
+  exercised through =extract_urls= at the same granularity.
 *** [2026-05-31] – Test =--check-urls= against an in-process local HTTP server; no skip-network flag
 **** Reason
 =/assess= judged the local-server approach clearly correct over the alternative ("hit real
