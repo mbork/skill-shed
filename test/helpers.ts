@@ -68,29 +68,46 @@ export async function make_skill_dir(name = 'my-skill'): Promise<string> {
 	return skill_dir
 }
 
-// Creates a skill_dir whose SKILL.md has a distinct value at each git layer, plus a matching
-// target_dir.  Used to verify deploy's source-mode dispatch reads the *right* layer:
-//   HEAD^ commit   -> 'older\n'
-//   HEAD  commit   -> 'head\n'
-//   index (staged) -> 'staged\n'
-//   working tree   -> 'workdir\n'
+// Wraps `body` in minimal valid frontmatter (a matching `name` plus a `description`) so the
+// resulting SKILL.md passes deploy's lint gate.  `name` must equal the skill-directory
+// basename; both this and make_skill_dir default to 'my-skill', so the common case is
+// `writeFile(join(await make_skill_dir(), 'SKILL.md'), skill_md(body))`.
+export function skill_md(body: string, name = 'my-skill'): string {
+	const frontmatter = [
+		'---',
+		`name: ${name}`,
+		'description: A skill used in deploy tests.',
+		'---',
+		'',
+		'',
+	].join('\n')
+	return frontmatter + body
+}
+
+// Creates a skill_dir whose SKILL.md has a distinct body at each git layer (each wrapped in
+// valid frontmatter via skill_md so deploy's lint gate passes), plus a matching target_dir.
+// Used to verify deploy's source-mode dispatch reads the *right* layer:
+//   HEAD^ commit   -> skill_md('older\n')
+//   HEAD  commit   -> skill_md('head\n')
+//   index (staged) -> skill_md('staged\n')
+//   working tree   -> skill_md('workdir\n')
 export async function setup_skill_dir_with_distinct_layers(): Promise<{
 	skill_dir: string
 	target_dir: string
 }> {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 	await setup_git(skill_dir)
-	await writeFile(join(skill_dir, 'SKILL.md'), 'older\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), skill_md('older\n'))
 	await exec_file('git', ['add', 'SKILL.md'], {cwd: skill_dir})
 	await exec_file('git', ['commit', '-m', 'older'], {cwd: skill_dir})
-	await writeFile(join(skill_dir, 'SKILL.md'), 'head\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), skill_md('head\n'))
 	await exec_file('git', ['add', 'SKILL.md'], {cwd: skill_dir})
 	await exec_file('git', ['commit', '-m', 'head'], {cwd: skill_dir})
-	await writeFile(join(skill_dir, 'SKILL.md'), 'staged\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), skill_md('staged\n'))
 	await exec_file('git', ['add', 'SKILL.md'], {cwd: skill_dir})
-	await writeFile(join(skill_dir, 'SKILL.md'), 'workdir\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), skill_md('workdir\n'))
 	return {skill_dir, target_dir}
 }
 

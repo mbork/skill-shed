@@ -40,8 +40,31 @@ export function format_lint_message(msg: LintMessage): string {
 	return `${base} (see ${msg.reference})`
 }
 
+// * report_lint_messages
+// Prints each message to the chosen stream and returns whether any was an error, leaving the
+// exit decision to the caller.  `lint` prints to stdout (the report is its output); `deploy`
+// prints to stderr (diagnostics around its normal stdout deploy log).
+export function report_lint_messages(
+	messages: LintMessage[],
+	stream: 'stdout' | 'stderr',
+): boolean {
+	let has_errors = false
+	for (const msg of messages) {
+		const line = format_lint_message(msg)
+		if (stream === 'stderr') {
+			console.error(line)
+		} else {
+			console.log(line)
+		}
+		if (msg.severity === 'error') {
+			has_errors = true
+		}
+	}
+	return has_errors
+}
+
 // * check_skill_md_exists
-function check_skill_md_exists(skill_dir: string, manifest: Manifest): LintMessage[] {
+export function check_skill_md_exists(skill_dir: string, manifest: Manifest): LintMessage[] {
 	if (!manifest.some(e => e.target_name === 'SKILL.md')) {
 		return [{file: skill_dir, line: 0, severity: 'error', message: 'no file targets SKILL.md'}]
 	}
@@ -533,7 +556,7 @@ function check_frontmatter(entry: ManifestEntry, skill_dir_name: string): LintMe
 }
 
 // * lint_manifest
-function lint_manifest(skill_dir: string, manifest: Manifest): LintMessage[] {
+export function lint_manifest(skill_dir: string, manifest: Manifest): LintMessage[] {
 	const skill_dir_name = basename(skill_dir)
 	const skill_md_entry = manifest.find(e => e.target_name === 'SKILL.md')
 	const entry_headings = extract_headings(manifest)
@@ -564,11 +587,8 @@ export async function lint(skill_dir: string, source: ManifestSource): Promise<v
 		process.exit(1)
 	}
 	const messages = lint_manifest(skill_dir, manifest)
-	for (const msg of messages) {
-		console.log(format_lint_message(msg))
-	}
-	const is_clean = messages.every(m => m.severity !== 'error')
-	if (!is_clean) {
+	const has_errors = report_lint_messages(messages, 'stdout')
+	if (has_errors) {
 		process.exit(1)
 	}
 }

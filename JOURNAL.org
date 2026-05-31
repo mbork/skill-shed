@@ -625,7 +625,7 @@ Lint skill files for common errors before deployment.
 ** Blocked by
 - [[*Preserve line numbers while comment stripping]]
 
-** Steps [14/16]
+** Steps [15/16]
 - [X] Check that `SKILL.md` exists (error)
 - [X] Check for conflicting source files (two files resolving to the same target name) (error)
 - [X] Check for unclosed HTML comments (error); report file + line number
@@ -672,7 +672,7 @@ Lint skill files for common errors before deployment.
   "file not referenced from =SKILL.md="); reachability is transitive (=SKILL.md= -> A -> B
   keeps B); match the deployed =target_name= only; boundary-aware so =data.md= is not matched
   inside =metadata.md=
-- [ ] Wire lint error checks into =deploy=: pass the already-built manifest to =lint_manifest=;
+- [X] Wire lint error checks into =deploy=: pass the already-built manifest to =lint_manifest=;
   replace =validate_manifest= calls with the lint pass and delete =validate_manifest=
 
 ** Session log

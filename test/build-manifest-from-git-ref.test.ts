@@ -142,7 +142,7 @@ test('build_manifest_from_git_ref: nested skill_dir with files in its own subdir
 
 // When the ref is valid but skill_dir has no files at that ref (e.g. the subdirectory didn't
 // exist yet), ls-tree exits 0 and returns empty output.  The function returns [] and lets
-// validate_manifest report "No entry targets SKILL.md" with an actionable message.
+// the lint pass (check_skill_md_exists) report "no file targets SKILL.md" downstream.
 test('build_manifest_from_git_ref: valid ref but skill_dir has no files at that ref returns empty manifest', async () => {
 	const parent = await make_tmp_dir()
 	await setup_git(parent)

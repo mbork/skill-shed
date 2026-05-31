@@ -3,10 +3,10 @@ import {mkdir, stat, unlink, writeFile} from 'node:fs/promises'
 import {dirname, resolve} from 'node:path'
 import {
 	build_manifest,
-	validate_manifest,
 	type Manifest,
 	type ManifestSource,
 } from './manifest.ts'
+import {lint_manifest, report_lint_messages} from './lint.ts'
 import {expand_tilde, read_env_file} from './utils.ts'
 
 import {
@@ -83,10 +83,9 @@ export async function deploy(
 		process.exit(1)
 	}
 
-	try {
-		validate_manifest(manifest)
-	} catch (e: unknown) {
-		console.error(`Error: ${(e as Error).message}`)
+	const lint_messages = lint_manifest(skill_dir, manifest)
+	const has_lint_errors = report_lint_messages(lint_messages, 'stderr')
+	if (has_lint_errors) {
 		process.exit(1)
 	}
 

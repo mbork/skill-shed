@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {mkdir, writeFile} from 'node:fs/promises'
 import {join} from 'node:path'
 import {run_lint, make_skill_dir, run_script, setup_git, git_commit} from './helpers.ts'
+import {check_skill_md_exists, format_lint_message} from '../src/lint.ts'
 
 // Minimal valid frontmatter for a skill dir named "my-skill" (the default from make_skill_dir).
 const FRONTMATTER = [
@@ -47,6 +48,47 @@ test('lint: SKILL.source.md present — no errors', async () => {
 
 	assert.strictEqual(result.code, 0)
 	assert.strictEqual(result.stdout.trim(), '')
+})
+
+// ** check_skill_md_exists (unit)
+
+// The empty-manifest branch is only reached at the integration level (deploy/lint of a skill
+// dir with no SKILL.md); this pins it directly.  The "present" branch is covered by the
+// integration tests above.
+test('check_skill_md_exists: empty manifest yields a single "no file targets SKILL.md" error', () => {
+	const messages = check_skill_md_exists('/skills/my-skill', [])
+
+	assert.strictEqual(messages.length, 1)
+	assert.strictEqual(messages[0].severity, 'error')
+	assert.strictEqual(messages[0].file, '/skills/my-skill')
+	assert.match(messages[0].message, /no file targets SKILL\.md/)
+})
+
+// ** format_lint_message (unit)
+
+// The exact output shape is pinned here (deterministic — no random tmp paths), so the
+// subprocess/integration tests can stay loose with .match.
+test('format_lint_message: no reference renders file:line: severity: message', () => {
+	const msg = {
+		file: 'SKILL.md', line: 0, severity: 'error' as const, message: 'no file targets SKILL.md',
+	}
+
+	assert.strictEqual(format_lint_message(msg), 'SKILL.md:0: error: no file targets SKILL.md')
+})
+
+test('format_lint_message: a reference is appended as a trailing (see ...)', () => {
+	const msg = {
+		file: 'SKILL.md',
+		line: 3,
+		severity: 'warning' as const,
+		message: 'body exceeds 20000 characters',
+		reference: 'https://agentskills.io/spec',
+	}
+
+	assert.strictEqual(
+		format_lint_message(msg),
+		'SKILL.md:3: warning: body exceeds 20000 characters (see https://agentskills.io/spec)',
+	)
 })
 
 // ** Conflict detection

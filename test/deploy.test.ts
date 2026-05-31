@@ -5,7 +5,7 @@ import {chmod, mkdir, readdir, readFile, rmdir, stat, symlink, unlink, writeFile
 import {join, resolve} from 'node:path'
 import {homedir} from 'node:os'
 import {SIDECAR_FILENAME, hash_content} from '../src/sidecar.ts'
-import {run_deploy, run_script, make_tmp_dir, setup_skill_dir_with_distinct_layers} from './helpers.ts'
+import {run_deploy, run_script, make_tmp_dir, make_skill_dir, skill_md, setup_skill_dir_with_distinct_layers} from './helpers.ts'
 
 // * Deploy
 
@@ -31,16 +31,16 @@ test('deploy: missing TARGET_DIRECTORY in .env', async () => {
 })
 
 test('deploy: expands ~ in TARGET_DIRECTORY', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_name = `skill-shed-tilde-test-${Date.now()}`
 	const target_dir = resolve(homedir(), target_name)
-	await writeFile(join(skill_dir, 'SKILL.md'), 'content')
+	await writeFile(join(skill_dir, 'SKILL.md'), skill_md('content'))
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=~/${target_name}\n`)
 	try {
 		const result = await run_deploy(skill_dir)
 		assert.strictEqual(result.code, 0)
 		const deployed = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
-		assert.strictEqual(deployed, 'content')
+		assert.strictEqual(deployed, skill_md('content'))
 	} finally {
 		await unlink(join(target_dir, 'SKILL.md'))
 		await unlink(join(target_dir, SIDECAR_FILENAME))
@@ -56,7 +56,7 @@ test('deploy: missing SKILL.md and SKILL.source.md', async () => {
 	const result = await run_deploy(skill_dir)
 
 	assert.strictEqual(result.code, 1)
-	assert.strictEqual(result.stderr.trim(), 'Error: No entry targets SKILL.md')
+	assert.match(result.stderr, /error: no file targets SKILL\.md/)
 })
 
 test('deploy: both SKILL.md and SKILL.source.md aborts', async () => {
@@ -69,15 +69,49 @@ test('deploy: both SKILL.md and SKILL.source.md aborts', async () => {
 	const result = await run_deploy(skill_dir)
 
 	assert.strictEqual(result.code, 1)
-	assert.strictEqual(result.stderr.trim(), 'Error: Conflicting files: SKILL.md, SKILL.source.md')
+	assert.match(result.stderr, /error: conflicting source files/)
+})
+
+test('deploy: aborts on a lint error beyond the structural checks (no frontmatter)', async () => {
+	const skill_dir = await make_skill_dir()
+	const target_dir = await make_tmp_dir()
+	await writeFile(join(skill_dir, 'SKILL.md'), '# Skill\n\nNo frontmatter here.\n')
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+
+	const result = await run_deploy(skill_dir)
+
+	assert.strictEqual(result.code, 1)
+	assert.match(result.stderr, /error: .*has no frontmatter/)
+	// The lint gate runs before any write (even the mkdir/sentinel/sidecar), so the target
+	// dir stays empty.  readdir lists hidden entries too, so this catches a stray sentinel
+	// or sidecar, not just a missing SKILL.md.
+	const target_entries = await readdir(target_dir)
+	assert.deepStrictEqual(target_entries, [], 'deploy must abort before writing any file')
+})
+
+test('deploy: prints lint warnings as a heads-up but still deploys', async () => {
+	const skill_dir = await make_skill_dir()
+	const target_dir = await make_tmp_dir()
+	const content = skill_md('# Skill\n\nBody text.\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), content)
+	// orphan.md is never referenced from SKILL.md, so it triggers a warning (not an error).
+	await writeFile(join(skill_dir, 'orphan.md'), '# Orphan\n\nNot referenced.\n')
+	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
+
+	const result = await run_deploy(skill_dir)
+
+	assert.strictEqual(result.code, 0)
+	assert.match(result.stderr, /orphan\.md:0: warning: file not referenced from SKILL\.md/)
+	const deployed = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
+	assert.strictEqual(deployed, content)
 })
 
 test('deploy: SKILL.source.md is stripped and deployed as SKILL.md', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
 	await writeFile(
 		join(skill_dir, 'SKILL.source.md'),
-		'# My skill\n\n<!-- a comment -->\n\nSome text.\n',
+		skill_md('# My skill\n\n<!-- a comment -->\n\nSome text.\n'),
 	)
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 
@@ -85,12 +119,12 @@ test('deploy: SKILL.source.md is stripped and deployed as SKILL.md', async () =>
 
 	assert.strictEqual(result.code, 0)
 	const deployed = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
-	assert.strictEqual(deployed, '# My skill\n\nSome text.\n')
+	assert.strictEqual(deployed, skill_md('# My skill\n\nSome text.\n'))
 })
 
 test('deploy: target directory is created if missing', async () => {
-	const skill_dir = await make_tmp_dir()
-	const content = '# Test skill\n'
+	const skill_dir = await make_skill_dir()
+	const content = skill_md('# Test skill\n')
 	await writeFile(join(skill_dir, 'SKILL.md'), content)
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${skill_dir}/nonexistent\n`)
 
@@ -102,9 +136,9 @@ test('deploy: target directory is created if missing', async () => {
 })
 
 test('deploy: relative TARGET_DIRECTORY is resolved relative to skill_dir, not cwd', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const other_dir = await make_tmp_dir()
-	const content = '# My skill\n'
+	const content = skill_md('# My skill\n')
 	await writeFile(join(skill_dir, 'SKILL.md'), content)
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=output\n`)
 
@@ -116,9 +150,9 @@ test('deploy: relative TARGET_DIRECTORY is resolved relative to skill_dir, not c
 })
 
 test('deploy: successful deploy', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	const content = '# My skill\n'
+	const content = skill_md('# My skill\n')
 	await writeFile(join(skill_dir, 'SKILL.md'), content)
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 
@@ -130,9 +164,9 @@ test('deploy: successful deploy', async () => {
 })
 
 test('deploy: skill file in subdirectory is deployed with directory created', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), '# Skill\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), skill_md('# Skill\n'))
 	await mkdir(join(skill_dir, 'examples'))
 	await writeFile(join(skill_dir, 'examples', 'demo.md'), 'demo\n')
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
@@ -145,9 +179,9 @@ test('deploy: skill file in subdirectory is deployed with directory created', as
 })
 
 test('deploy: multi-file skill deploys all git-tracked files', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.source.md'), '# My skill\n<!-- comment -->\nContent.\n')
+	await writeFile(join(skill_dir, 'SKILL.source.md'), skill_md('# My skill\n<!-- comment -->\nContent.\n'))
 	await writeFile(join(skill_dir, 'reference.md'), '# Reference\nSome reference.\n')
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 
@@ -155,7 +189,7 @@ test('deploy: multi-file skill deploys all git-tracked files', async () => {
 
 	assert.strictEqual(result.code, 0)
 	const deployed_skill = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
-	assert.strictEqual(deployed_skill, '# My skill\nContent.\n')
+	assert.strictEqual(deployed_skill, skill_md('# My skill\nContent.\n'))
 	const deployed_reference = await readFile(join(target_dir, 'reference.md'), 'utf8')
 	assert.strictEqual(deployed_reference, '# Reference\nSome reference.\n')
 	const target_files = await readdir(target_dir)
@@ -163,9 +197,9 @@ test('deploy: multi-file skill deploys all git-tracked files', async () => {
 })
 
 test('deploy: only .source.md files have comments stripped', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.source.md'), 'A\n<!-- strip me -->\nB\n')
+	await writeFile(join(skill_dir, 'SKILL.source.md'), skill_md('A\n<!-- strip me -->\nB\n'))
 	await writeFile(join(skill_dir, 'extra.md'), 'C\n<!-- keep me -->\nD\n')
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 
@@ -173,15 +207,15 @@ test('deploy: only .source.md files have comments stripped', async () => {
 
 	assert.strictEqual(result.code, 0)
 	const deployed_skill = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
-	assert.strictEqual(deployed_skill, 'A\nB\n')
+	assert.strictEqual(deployed_skill, skill_md('A\nB\n'))
 	const deployed_extra = await readFile(join(target_dir, 'extra.md'), 'utf8')
 	assert.strictEqual(deployed_extra, 'C\n<!-- keep me -->\nD\n')
 })
 
 test('deploy: non-SKILL .source.md file has comments stripped alongside SKILL.source.md', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.source.md'), '# Skill\n<!-- strip -->\nContent.\n')
+	await writeFile(join(skill_dir, 'SKILL.source.md'), skill_md('# Skill\n<!-- strip -->\nContent.\n'))
 	await writeFile(join(skill_dir, 'reference.source.md'), '# Ref\n<!-- strip -->\nRef content.\n')
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 
@@ -189,7 +223,7 @@ test('deploy: non-SKILL .source.md file has comments stripped alongside SKILL.so
 
 	assert.strictEqual(result.code, 0)
 	const deployed_skill = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
-	assert.strictEqual(deployed_skill, '# Skill\nContent.\n')
+	assert.strictEqual(deployed_skill, skill_md('# Skill\nContent.\n'))
 	const deployed_reference = await readFile(join(target_dir, 'reference.md'), 'utf8')
 	assert.strictEqual(deployed_reference, '# Ref\nRef content.\n')
 	assert.deepStrictEqual(
@@ -199,9 +233,9 @@ test('deploy: non-SKILL .source.md file has comments stripped alongside SKILL.so
 })
 
 test('deploy: non-SKILL .source.md has comments stripped when SKILL.md is a pass-through', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), '# Skill\n<!-- keep -->\nContent.\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), skill_md('# Skill\n<!-- keep -->\nContent.\n'))
 	await writeFile(join(skill_dir, 'reference.source.md'), '# Ref\n<!-- strip -->\nRef content.\n')
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 
@@ -209,7 +243,7 @@ test('deploy: non-SKILL .source.md has comments stripped when SKILL.md is a pass
 
 	assert.strictEqual(result.code, 0)
 	const deployed_skill = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
-	assert.strictEqual(deployed_skill, '# Skill\n<!-- keep -->\nContent.\n')
+	assert.strictEqual(deployed_skill, skill_md('# Skill\n<!-- keep -->\nContent.\n'))
 	const deployed_reference = await readFile(join(target_dir, 'reference.md'), 'utf8')
 	assert.strictEqual(deployed_reference, '# Ref\nRef content.\n')
 	assert.deepStrictEqual(
@@ -221,9 +255,9 @@ test('deploy: non-SKILL .source.md has comments stripped when SKILL.md is a pass
 // ** Deploy: sidecar
 
 test('deploy: sidecar written after first deploy', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	const content = '# My skill\n'
+	const content = skill_md('# My skill\n')
 	await writeFile(join(skill_dir, 'SKILL.md'), content)
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 
@@ -237,9 +271,9 @@ test('deploy: sidecar written after first deploy', async () => {
 })
 
 test('deploy: second deploy with unchanged target succeeds', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	const content = '# My skill\n'
+	const content = skill_md('# My skill\n')
 	await writeFile(join(skill_dir, 'SKILL.md'), content)
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 
@@ -252,9 +286,9 @@ test('deploy: second deploy with unchanged target succeeds', async () => {
 })
 
 test('deploy: aborts when target was directly edited after last deploy', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), '# My skill\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), skill_md('# My skill\n'))
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 
 	await run_deploy(skill_dir)
@@ -266,9 +300,9 @@ test('deploy: aborts when target was directly edited after last deploy', async (
 })
 
 test('deploy: --force overwrites directly edited target', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	const content = '# My skill\n'
+	const content = skill_md('# My skill\n')
 	await writeFile(join(skill_dir, 'SKILL.md'), content)
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 
@@ -282,9 +316,9 @@ test('deploy: --force overwrites directly edited target', async () => {
 })
 
 test('deploy: aborts when target file has no sidecar entry', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), '# My skill\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), skill_md('# My skill\n'))
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 	await writeFile(join(target_dir, 'SKILL.md'), '# pre-existing\n')
 
@@ -295,9 +329,9 @@ test('deploy: aborts when target file has no sidecar entry', async () => {
 })
 
 test('deploy: --force overwrites file with no sidecar entry', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	const content = '# My skill\n'
+	const content = skill_md('# My skill\n')
 	await writeFile(join(skill_dir, 'SKILL.md'), content)
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 	await writeFile(join(target_dir, 'SKILL.md'), '# pre-existing\n')
@@ -313,9 +347,9 @@ test('deploy: --force overwrites file with no sidecar entry', async () => {
 const SENTINEL_FILENAME = '.skill-shed-deploy-in-progress'
 
 test('deploy: aborts when interrupted deploy sentinel present', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), '# My skill\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), skill_md('# My skill\n'))
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 	await writeFile(join(target_dir, SENTINEL_FILENAME), '')
 
@@ -326,9 +360,9 @@ test('deploy: aborts when interrupted deploy sentinel present', async () => {
 })
 
 test('deploy: --force proceeds despite sentinel', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	const content = '# My skill\n'
+	const content = skill_md('# My skill\n')
 	await writeFile(join(skill_dir, 'SKILL.md'), content)
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 	await writeFile(join(target_dir, SENTINEL_FILENAME), '')
@@ -343,9 +377,9 @@ test('deploy: --force proceeds despite sentinel', async () => {
 })
 
 test('deploy: sentinel absent after successful deploy', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), '# My skill\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), skill_md('# My skill\n'))
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 
 	const result = await run_deploy(skill_dir)
@@ -360,9 +394,9 @@ test('deploy: sentinel absent after successful deploy', async () => {
 // ** Deploy: stale files
 
 test('deploy: deletes unmodified owned stale file', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), '# My skill\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), skill_md('# My skill\n'))
 	await writeFile(join(skill_dir, 'reference.md'), '# Ref\n')
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 	await run_deploy(skill_dir)
@@ -380,9 +414,9 @@ test('deploy: deletes unmodified owned stale file', async () => {
 })
 
 test('deploy: aborts when owned stale file was modified', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), '# My skill\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), skill_md('# My skill\n'))
 	await writeFile(join(skill_dir, 'reference.md'), '# Ref\n')
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 	await run_deploy(skill_dir)
@@ -396,9 +430,9 @@ test('deploy: aborts when owned stale file was modified', async () => {
 })
 
 test('deploy: --force deletes modified owned stale file', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), '# My skill\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), skill_md('# My skill\n'))
 	await writeFile(join(skill_dir, 'reference.md'), '# Ref\n')
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 	await run_deploy(skill_dir)
@@ -419,9 +453,9 @@ test('deploy: --force deletes modified owned stale file', async () => {
 // ** Deploy: source modes and uncommon errors
 
 test('deploy: MANIFEST_COMMAND deploys files listed by the command', async () => {
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), '# From command\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), skill_md('# From command\n'))
 	// These files exist in skill_dir but MANIFEST_COMMAND does not echo them, so they
 	// must NOT be deployed.
 	await writeFile(join(skill_dir, 'extra.md'), '# Extra\n')
@@ -436,7 +470,7 @@ test('deploy: MANIFEST_COMMAND deploys files listed by the command', async () =>
 
 	assert.strictEqual(result.code, 0)
 	const deployed = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
-	assert.strictEqual(deployed, '# From command\n')
+	assert.strictEqual(deployed, skill_md('# From command\n'))
 	const entries = await readdir(target_dir)
 	assert.deepStrictEqual(entries.toSorted(), [SIDECAR_FILENAME, 'SKILL.md'])
 })
@@ -463,7 +497,7 @@ test('deploy: --workdir reads working tree, not index or HEAD', async () => {
 
 	assert.strictEqual(result.code, 0)
 	const deployed = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
-	assert.strictEqual(deployed, 'workdir\n')
+	assert.strictEqual(deployed, skill_md('workdir\n'))
 })
 
 test('deploy: --staged reads index, not working tree or HEAD', async () => {
@@ -473,7 +507,7 @@ test('deploy: --staged reads index, not working tree or HEAD', async () => {
 
 	assert.strictEqual(result.code, 0)
 	const deployed = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
-	assert.strictEqual(deployed, 'staged\n')
+	assert.strictEqual(deployed, skill_md('staged\n'))
 })
 
 test('deploy: --ref HEAD^ reads named commit, not HEAD or index or working tree', async () => {
@@ -483,7 +517,7 @@ test('deploy: --ref HEAD^ reads named commit, not HEAD or index or working tree'
 
 	assert.strictEqual(result.code, 0)
 	const deployed = await readFile(join(target_dir, 'SKILL.md'), 'utf8')
-	assert.strictEqual(deployed, 'older\n')
+	assert.strictEqual(deployed, skill_md('older\n'))
 })
 
 test('deploy: non-ENOENT error reading .env is reported', async () => {
@@ -499,9 +533,9 @@ test('deploy: non-ENOENT error reading .env is reported', async () => {
 test('deploy: non-ENOENT error from sentinel stat propagates', async () => {
 	// Contrived ELOOP via self-symlink covers has_sentinel's rethrow: when stat fails
 	// for any non-ENOENT reason, deploy must surface the error rather than proceed.
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), '# Skill\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), skill_md('# Skill\n'))
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
 	await run_deploy(skill_dir)
 
@@ -518,9 +552,9 @@ test('deploy: non-ENOENT error from sentinel stat propagates', async () => {
 test('deploy: non-ENOENT error during stale cleanup propagates', async () => {
 	// Tightening perms on a sub-directory of target_dir makes unlink fail with EACCES;
 	// covers the stale-cleanup rethrow that prevents silently-skipped cleanup failures.
-	const skill_dir = await make_tmp_dir()
+	const skill_dir = await make_skill_dir()
 	const target_dir = await make_tmp_dir()
-	await writeFile(join(skill_dir, 'SKILL.md'), '# Skill\n')
+	await writeFile(join(skill_dir, 'SKILL.md'), skill_md('# Skill\n'))
 	await mkdir(join(skill_dir, 'sub'))
 	await writeFile(join(skill_dir, 'sub', 'reference.md'), '# Ref\n')
 	await writeFile(join(skill_dir, '.env'), `TARGET_DIRECTORY=${target_dir}\n`)
