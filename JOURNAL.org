@@ -667,6 +667,19 @@ Lint skill files for common errors before deployment.
   - [ ] Update =lint_help= in =src/help.ts= (=--check-urls= and =SKILL_SHED_URL_TIMEOUT_MS=)
   - [ ] Tests — in-process local HTTP server (see Decision [2026-05-31]); route table and test
     list are there.  Extend =run_lint= to forward =env=.  Coverage must stay 100% (no =c8 ignore=)
+    - [X] =test/http-test-server.ts= done: module-only (no standalone runner — removed for
+      simplicity).  =start_test_server()= returns a =TestServer= (=base_url=, =url(path)=,
+      =requests[]=, =count(path)=, =close()=) on an ephemeral =127.0.0.1= port; importing it has
+      no side effects (nothing listens until called).  =close()= calls =closeAllConnections()=
+      first so a hung =/slow= socket cannot wedge =node --test= exit.
+    - [X] Manual check (verified end-to-end this way on [2026-06-01]): from the repo root, run a
+      throwaway importer, e.g.
+      =node --input-type=module -e "import {start_test_server} from './test/http-test-server.ts'; const s = await start_test_server(); for (const p of ['/ok','/redirect','/auth','/forbidden','/missing','/boom']) console.log(p, (await fetch(s.url(p), {redirect: 'manual'})).status); await s.close()"=
+      -> prints =200 302 401 403 404 500=.  =/head-405= needs =method: 'HEAD'= (405) vs a GET
+      (200); =/slow= needs an =AbortController= timeout (rejects =AbortError=).  These three plus
+      =count()= are what the integration tests assert.
+    - [ ] Still to do here: integration tests in =test/lint.test.ts= driving these routes, and
+      extend =run_lint= to forward =env= (so tests can set =SKILL_SHED_URL_TIMEOUT_MS=).
   - [ ] README: document =--check-urls=, the three warning classes, and the timeout env var
 - [X] Warn on empty sections — heading with no content (warning)
 - [X] Warn on empty skill body — =SKILL.md= body returned by =extract_frontmatter= is
