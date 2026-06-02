@@ -647,10 +647,16 @@ Lint skill files for common errors before deployment.
     attributes terminate cleanly), then trim trailing punctuation (=.,;:!?]}= always; a trailing
     =)= only when unbalanced, so a balanced path paren like =..._(programming)= survives), dedupe
     in first-occurrence order; exported for direct unit testing.  23 unit tests; 100% coverage
-  - [ ] =check_url(url, timeout_ms): Promise<UrlStatus>= — =fetch= with =redirect: 'follow'=,
+  - [X] =check_url(url, timeout_ms): Promise<UrlStatus>= — =fetch= with =redirect: 'follow'=,
     =method: 'HEAD'=, =AbortController= timeout; retry with =GET= on 405/501; cancel the body.
     Classify the final response: 2xx ok; 401/403 auth; other 4xx/5xx (or a 3xx that never
-    resolved) bad-status; =fetch= rejection (timeout/DNS/conn/TLS) unreachable
+    resolved) bad-status; =fetch= rejection (timeout/DNS/conn/TLS) unreachable.  Done in
+    =src/check-urls.ts=: =UrlStatus= union ={kind}=; pure =classify_status= and
+    =describe_fetch_error= exported for direct unit tests (the rest is covered through the local
+    server); private =fetch_no_body= wraps one timed, body-cancelled =fetch=.  20 tests in
+    =test/check-urls.test.ts= (8 =classify_status= + 4 =describe_fetch_error= + 8 =check_url=
+    against the local server, incl. redirect-follow and the 405->GET retry); =check-urls.ts= 100%
+    coverage; full suite 482 pass
   - [ ] =check_urls(manifest, {timeout_ms}): Promise<LintMessage[]>= — collect URLs with their
     ={file, line}= from every string =target_content=, memoize one network check per unique URL
     (bounded concurrency), emit one =warning= per occurrence; 2xx emits nothing.  Messages:
@@ -904,9 +910,11 @@ hook so a throwing test cannot leak the listener and wedge =node --test= exit.
 - =/ok= -> 200; =/redirect= -> 302 =Location: /ok=; =/auth= -> 401; =/forbidden= -> 403;
   =/missing= -> 404; =/boom= -> 500; =/slow= -> never responds (timeout); =/head-405= -> 405
   on HEAD but 200 on GET (covers the HEAD->GET fallback).
-- Connection failure uses a closed port =http://127.0.0.1:1/= (no server, immediate
-  =ECONNREFUSED=) — DNS NXDOMAIN lands in the same "unreachable" bucket, so no =.invalid= host
-  is needed and the test stays fully offline.
+- Connection failure uses a valid-but-closed port from the =closed_port()= helper (bind an
+  ephemeral =127.0.0.1:0=, read the port, release it), giving an immediate =ECONNREFUSED= while
+  staying fully offline.  NB: a /blocked/ port like =:1= does NOT work — =fetch= rejects it as
+  "bad port" without attempting a connection (a different code path).  DNS NXDOMAIN would land in
+  the same "unreachable" bucket, so no =.invalid= host is needed.
 **** Tests
 - Unit (=test/check-urls.test.ts=, no network): =extract_urls= finds inline-link / autolink /
   bare URLs, dedupes, strips trailing punctuation, ignores non-=http(s)=, collects across

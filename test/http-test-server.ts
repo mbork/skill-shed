@@ -119,3 +119,18 @@ export async function start_test_server(): Promise<TestServer> {
 		close: () => close_server(server),
 	}
 }
+
+// * closed_port
+// Returns a `127.0.0.1` port that is (all but certainly) closed: bind an ephemeral port, read it,
+// then release it.  A `fetch` to it gets an immediate ECONNREFUSED — a real connection failure,
+// still fully offline.  (A blocked port like `:1` is no good: `fetch` rejects it as "bad port"
+// without ever attempting a connection, so it exercises a different path.)
+export async function closed_port(): Promise<number> {
+	const server = createServer()
+	await new Promise<void>((resolve) => {
+		server.listen(0, '127.0.0.1', resolve)
+	})
+	const address = server.address() as AddressInfo
+	await close_server(server)
+	return address.port
+}

@@ -1,7 +1,9 @@
 // * Imports
-import {test} from 'node:test'
+import {test, describe, before, after} from 'node:test'
 import assert from 'node:assert/strict'
-import {extract_urls} from '../src/check-urls.ts'
+import {extract_urls, classify_status, describe_fetch_error, check_url} from '../src/check-urls.ts'
+import {start_test_server, closed_port} from './http-test-server.ts'
+import type {TestServer} from './http-test-server.ts'
 
 // * extract_urls
 // Contract: return every http(s) URL in `content`, deduped, in first-occurrence order.
@@ -189,4 +191,122 @@ test('extract_urls: strips a mixed wrapper-paren-then-period tail, keeping the p
 		extract_urls('(see https://en.wikipedia.org/wiki/Skill_(programming)).'),
 		['https://en.wikipedia.org/wiki/Skill_(programming)'],
 	)
+})
+
+// * classify_status
+// Contract: 200-299 -> ok; 401/403 -> auth (carrying the status); every other status -> bad-status
+// (carrying the status).  The status set is open-ended, so this is unit-tested directly; the
+// `status < 200` case cannot arise from `fetch` but the branch still classifies as bad-status.
+
+test('classify_status: a 200 is ok', () => {
+	assert.deepStrictEqual(classify_status(200), {kind: 'ok'})
+})
+
+test('classify_status: a 299 is ok', () => {
+	assert.deepStrictEqual(classify_status(299), {kind: 'ok'})
+})
+
+test('classify_status: a 401 is auth', () => {
+	assert.deepStrictEqual(classify_status(401), {kind: 'auth', status: 401})
+})
+
+test('classify_status: a 403 is auth', () => {
+	assert.deepStrictEqual(classify_status(403), {kind: 'auth', status: 403})
+})
+
+test('classify_status: a 404 is bad-status', () => {
+	assert.deepStrictEqual(classify_status(404), {kind: 'bad-status', status: 404})
+})
+
+test('classify_status: a 500 is bad-status', () => {
+	assert.deepStrictEqual(classify_status(500), {kind: 'bad-status', status: 500})
+})
+
+test('classify_status: an unresolved 3xx is bad-status', () => {
+	assert.deepStrictEqual(classify_status(302), {kind: 'bad-status', status: 302})
+})
+
+test('classify_status: a sub-200 status is bad-status', () => {
+	// Unreachable through `fetch` (final responses are always >= 200), but the branch exists.
+	assert.deepStrictEqual(classify_status(100), {kind: 'bad-status', status: 100})
+})
+
+// * describe_fetch_error
+// Contract: an abort -> `timeout`; an error with an `Error` cause -> the cause's message; any
+// other `Error` -> its own message; a non-`Error` rejection -> its string form.
+
+test('describe_fetch_error: an abort reads as timeout', () => {
+	const error = new Error('the operation was aborted')
+	error.name = 'AbortError'
+	assert.equal(describe_fetch_error(error), 'timeout')
+})
+
+test('describe_fetch_error: a network error reports its cause message', () => {
+	const error = new Error('fetch failed', {cause: new Error('getaddrinfo ENOTFOUND host')})
+	assert.equal(describe_fetch_error(error), 'getaddrinfo ENOTFOUND host')
+})
+
+test('describe_fetch_error: an error with no Error cause reports its own message', () => {
+	assert.equal(describe_fetch_error(new Error('connection reset by peer')), 'connection reset by peer')
+})
+
+test('describe_fetch_error: a non-Error rejection is stringified', () => {
+	assert.equal(describe_fetch_error('a bare string rejection'), 'a bare string rejection')
+})
+
+// * check_url
+// Contract: probe a URL with a `HEAD` (retrying once with `GET` on 405/501), follow redirects,
+// and classify the final response — 2xx ok, 401/403 auth, other status bad-status, a rejected
+// fetch unreachable.  Driven against the in-process local server (see `http-test-server.ts`).
+
+describe('check_url', () => {
+	let server: TestServer
+
+	before(async () => {
+		server = await start_test_server()
+	})
+
+	after(() => server.close())
+
+	test('check_url: a 200 is ok', async () => {
+		assert.deepStrictEqual(await check_url(server.url('/ok'), 1000), {kind: 'ok'})
+	})
+
+	test('check_url: follows a redirect through to a 200 (ok)', async () => {
+		assert.deepStrictEqual(await check_url(server.url('/redirect'), 1000), {kind: 'ok'})
+	})
+
+	test('check_url: a 401 is auth', async () => {
+		assert.deepStrictEqual(await check_url(server.url('/auth'), 1000), {kind: 'auth', status: 401})
+	})
+
+	test('check_url: a 403 is auth', async () => {
+		assert.deepStrictEqual(await check_url(server.url('/forbidden'), 1000), {kind: 'auth', status: 403})
+	})
+
+	test('check_url: a 404 is bad-status', async () => {
+		assert.deepStrictEqual(await check_url(server.url('/missing'), 1000), {kind: 'bad-status', status: 404})
+	})
+
+	test('check_url: a 500 is bad-status', async () => {
+		assert.deepStrictEqual(await check_url(server.url('/boom'), 1000), {kind: 'bad-status', status: 500})
+	})
+
+	test('check_url: retries with GET when HEAD returns 405, then classifies the GET (ok)', async () => {
+		assert.deepStrictEqual(await check_url(server.url('/head-405'), 1000), {kind: 'ok'})
+	})
+
+	test('check_url: a hung response times out (unreachable)', async () => {
+		assert.deepStrictEqual(
+			await check_url(server.url('/slow'), 100),
+			{kind: 'unreachable', reason: 'timeout'},
+		)
+	})
+
+	test('check_url: a refused connection is unreachable (real ECONNREFUSED, not a timeout)', async () => {
+		const port = await closed_port()
+		const result = await check_url(`http://127.0.0.1:${port}/`, 1000)
+		assert(result.kind === 'unreachable')
+		assert.ok(result.reason.includes('ECONNREFUSED'))
+	})
 })
