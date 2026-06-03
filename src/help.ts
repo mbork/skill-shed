@@ -8,8 +8,8 @@ Usage: skill-shed <command> [options]
 
 Commands:
   init    Initialize a new skill directory
-  deploy  Deploy a skill to its target directory
   lint    Lint a skill directory for errors and warnings
+  deploy  Deploy a skill to its target directory
   help    Show help for a command
 
 Global config: $SKILL_SHED_CONFIG (default: ~/.skill-shed.env, dotenv format)
