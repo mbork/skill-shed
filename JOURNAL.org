@@ -615,8 +615,9 @@ in the sidecar — deploy should abort unless =--force= is passed.
 ** Decisions
 ** Session log
 
-* INPROGRESS Skill linting
+* DONE Skill linting
 :LOGBOOK:
+- State "DONE"       from "INPROGRESS" [2026-06-03 Wed 06:16]
 - State "INPROGRESS" from "TODO"       [2026-04-22 Wed 10:46]
 - State "TODO"       from "BLOCKED"    [2026-04-21 Tue 09:30]
 :END:
@@ -625,7 +626,7 @@ Lint skill files for common errors before deployment.
 ** Blocked by
 - [[*Preserve line numbers while comment stripping]]
 
-** Steps [15/16]
+** Steps [16/16]
 - [X] Check that `SKILL.md` exists (error)
 - [X] Check for conflicting source files (two files resolving to the same target name) (error)
 - [X] Check for unclosed HTML comments (error); report file + line number
@@ -640,7 +641,7 @@ Lint skill files for common errors before deployment.
     cross-field checks, Levenshtein typo detection (≤ 2 edits from a known portable field name)
   - [X] =check_frontmatter(entry, skill_dir_name)= in =src/lint.ts=; wire into =lint_manifest()=
   - [X] Unit tests in =test/frontmatter.test.ts=; integration tests in =test/lint.test.ts=
-- [ ] Check URLs with =--check-urls= flag: follow redirects, accept final 2xx; treat 401/403
+- [X] Check URLs with =--check-urls= flag: follow redirects, accept final 2xx; treat 401/403
   as distinct warning ("may require auth"); treat 404/5xx/timeout/DNS failure as warning
   - [X] New =src/check-urls.ts=.  Pure =extract_urls(content): string[]= — match =https?://=
     runs, ending the body at whitespace or =< > " ' `= (so autolinks, inline code, and HTML
@@ -685,7 +686,7 @@ Lint skill files for common errors before deployment.
     set, =await check_urls(...)= and append its messages to those of =lint_manifest= before
     reporting.  Done: =lint()= reads =read_url_timeout()=, calls =check_urls= on the true branch,
     pushes its warnings; URL checks are warnings only so the error-based exit code is unchanged.
-  - [ ] Update =lint_help= in =src/help.ts= (=--check-urls= and =SKILL_SHED_URL_TIMEOUT_MS=)
+  - [X] Update =lint_help= in =src/help.ts= (=--check-urls= and =SKILL_SHED_URL_TIMEOUT_MS=)
   - [X] Tests — in-process local HTTP server (see Decision [2026-05-31]); route table and test
     list are there.  Extend =run_lint= to forward =env=.  Coverage must stay 100% (no =c8 ignore=)
     - [X] =test/http-test-server.ts= done: module-only (no standalone runner — removed for
@@ -704,7 +705,9 @@ Lint skill files for common errors before deployment.
       404 and exits 0 (warnings never fail), no =--check-urls= skips URL checks (opt-in), and
       =SKILL_SHED_URL_TIMEOUT_MS=100= makes =/never= time out quickly.  Component-level routing
       (auth/redirect/multi-file/binary/fragment/=count()=) is covered in =test/check-urls.test.ts=.
-  - [ ] README: document =--check-urls=, the three warning classes, and the timeout env var
+  - [X] README: document =--check-urls=, the three warning classes, and the timeout env var
+    (deferred per request — NOT written into =README.org=; the gap is logged in
+    =README-REVIEW.md= and the actual edit belongs to the =Expand README.org= TODO)
 - [X] Warn on empty sections — heading with no content (warning)
 - [X] Warn on empty skill body — =SKILL.md= body returned by =extract_frontmatter= is
   empty after =.trim()= (warning)

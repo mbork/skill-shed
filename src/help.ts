@@ -68,7 +68,11 @@ Source options (mutually exclusive; default: --clean):
   --ref <ref>    Lint a specific git ref (tag, branch, or commit)
 
 Other options:
-  --help, -h  Show this help message
+  --check-urls  Probe every http(s) URL over the network; report non-OK ones as warnings
+  --help, -h    Show this help message
+
+Environment:
+  SKILL_SHED_URL_TIMEOUT_MS  Per-URL timeout in ms for --check-urls (default: 10000)
 
 Exit codes:
   0  No errors (warnings may be present)
