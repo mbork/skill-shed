@@ -1,9 +1,17 @@
 // * Imports
-import {test, describe, before, after} from 'node:test'
+import {test, describe, before, after, beforeEach, afterEach} from 'node:test'
 import assert from 'node:assert/strict'
-import {extract_urls, classify_status, describe_fetch_error, check_url} from '../src/check-urls.ts'
+import {
+	extract_urls,
+	extract_url_occurrences,
+	classify_status,
+	describe_fetch_error,
+	check_url,
+	check_urls,
+} from '../src/check-urls.ts'
 import {start_test_server, closed_port} from './http-test-server.ts'
 import type {TestServer} from './http-test-server.ts'
+import type {ManifestEntry} from '../src/manifest.ts'
 
 // * extract_urls
 // Contract: return every http(s) URL in `content`, deduped, in first-occurrence order.
@@ -262,6 +270,8 @@ test('describe_fetch_error: a non-Error rejection is stringified', () => {
 describe('check_url', () => {
 	let server: TestServer
 
+	// One shared server: these tests assert only on check_url's return value, never on
+	// server.count(), so accumulated request history does not matter.
 	before(async () => {
 		server = await start_test_server()
 	})
@@ -308,5 +318,203 @@ describe('check_url', () => {
 		const result = await check_url(`http://127.0.0.1:${port}/`, 1000)
 		assert(result.kind === 'unreachable')
 		assert.ok(result.reason.includes('ECONNREFUSED'))
+	})
+})
+
+// * extract_url_occurrences
+// Contract: every occurrence (NOT deduped) paired with its 0-based line index — the positional
+// counterpart of `extract_urls`.
+
+test('extract_url_occurrences: reports the 0-based line index of each URL', () => {
+	const content = [
+		'# Title',
+		'',
+		'See https://agentskills.io/specification for the rules.',
+	].join('\n')
+	assert.deepStrictEqual(
+		extract_url_occurrences(content),
+		[{url: 'https://agentskills.io/specification', line: 2}],
+	)
+})
+
+test('extract_url_occurrences: keeps duplicates, one entry per occurrence, with their lines', () => {
+	const content = [
+		'https://example.com/a',
+		'https://example.com/a',
+	].join('\n')
+	assert.deepStrictEqual(
+		extract_url_occurrences(content),
+		[
+			{url: 'https://example.com/a', line: 0},
+			{url: 'https://example.com/a', line: 1},
+		],
+	)
+})
+
+test('extract_url_occurrences: finds multiple URLs on one line', () => {
+	assert.deepStrictEqual(
+		extract_url_occurrences('a https://example.com/x and https://example.com/y here'),
+		[
+			{url: 'https://example.com/x', line: 0},
+			{url: 'https://example.com/y', line: 0},
+		],
+	)
+})
+
+// * check_urls
+// Contract: one `warning` per occurrence of a non-OK URL across the manifest's string content
+// (OK emits nothing); each unique URL — keyed minus its `#fragment` — is probed once; warnings
+// name the full URL and locate it by file + 1-based source line (line_map-translated).  Driven
+// against the local server; a fresh server per test keeps `count()` assertions independent.
+
+function md_entry(source_name: string, target_content: string, line_map?: number[]): ManifestEntry {
+	return {
+		source_name,
+		target_name: source_name,
+		source_content: target_content,
+		target_content,
+		line_map,
+	}
+}
+
+// A Buffer entry whose bytes happen to spell `content` — used to prove that binary entries are
+// skipped, not decoded and scanned for URLs.
+function binary_entry(source_name: string, content: string): ManifestEntry {
+	const buffer = Buffer.from(content)
+	return {source_name, target_name: source_name, source_content: buffer, target_content: buffer}
+}
+
+describe('check_urls', () => {
+	let server: TestServer
+
+	// A fresh server per test: some tests assert server.count(), which accumulates over a
+	// server's lifetime, so each test needs a clean count to stay independent.
+	beforeEach(async () => {
+		server = await start_test_server()
+	})
+
+	afterEach(() => server.close())
+
+	test('check_urls: clean URLs produce no messages', async () => {
+		const entry = md_entry('SKILL.md', `ok ${server.url('/ok')} and ${server.url('/redirect')}`)
+		assert.deepStrictEqual(await check_urls([entry], {timeout_ms: 1000}), [])
+	})
+
+	test('check_urls: a 404 yields one bad-status warning at the right file and line', async () => {
+		const content = ['# Skill', '', `Broken: ${server.url('/missing')}`].join('\n')
+		const messages = await check_urls([md_entry('guide.md', content)], {timeout_ms: 1000})
+		assert.deepStrictEqual(messages, [{
+			file: 'guide.md',
+			line: 3,
+			severity: 'warning',
+			message: `URL returned HTTP 404: ${server.url('/missing')}`,
+		}])
+	})
+
+	test('check_urls: a 401 yields an auth warning', async () => {
+		const messages = await check_urls(
+			[md_entry('SKILL.md', server.url('/auth'))],
+			{timeout_ms: 1000},
+		)
+		assert.deepStrictEqual(messages, [{
+			file: 'SKILL.md',
+			line: 1,
+			severity: 'warning',
+			message: `URL may require auth (HTTP 401): ${server.url('/auth')}`,
+		}])
+	})
+
+	test('check_urls: an unreachable URL yields a warning (timeout)', async () => {
+		const messages = await check_urls(
+			[md_entry('SKILL.md', server.url('/slow'))],
+			{timeout_ms: 100},
+		)
+		assert.deepStrictEqual(messages, [{
+			file: 'SKILL.md',
+			line: 1,
+			severity: 'warning',
+			message: `URL unreachable (timeout): ${server.url('/slow')}`,
+		}])
+	})
+
+	test('check_urls: warns once per occurrence of a repeated URL but probes it only once', async () => {
+		const content = [server.url('/missing'), server.url('/missing')].join('\n')
+		const messages = await check_urls([md_entry('SKILL.md', content)], {timeout_ms: 1000})
+		assert.deepStrictEqual(messages, [
+			{
+				file: 'SKILL.md', line: 1, severity: 'warning',
+				message: `URL returned HTTP 404: ${server.url('/missing')}`,
+			},
+			{
+				file: 'SKILL.md', line: 2, severity: 'warning',
+				message: `URL returned HTTP 404: ${server.url('/missing')}`,
+			},
+		])
+		assert.equal(server.count('/missing'), 1)
+	})
+
+	test('check_urls: URLs differing only by #fragment share one probe but each warns', async () => {
+		const content = [`${server.url('/missing')}#install`, `${server.url('/missing')}#usage`].join('\n')
+		const messages = await check_urls([md_entry('SKILL.md', content)], {timeout_ms: 1000})
+		assert.deepStrictEqual(messages, [
+			{
+				file: 'SKILL.md', line: 1, severity: 'warning',
+				message: `URL returned HTTP 404: ${server.url('/missing')}#install`,
+			},
+			{
+				file: 'SKILL.md', line: 2, severity: 'warning',
+				message: `URL returned HTTP 404: ${server.url('/missing')}#usage`,
+			},
+		])
+		assert.equal(server.count('/missing'), 1)
+	})
+
+	test('check_urls: checks URLs across multiple files', async () => {
+		const messages = await check_urls([
+			md_entry('SKILL.md', server.url('/missing')),
+			md_entry('guide.md', server.url('/boom')),
+		], {timeout_ms: 1000})
+		assert.deepStrictEqual(messages, [
+			{
+				file: 'SKILL.md', line: 1, severity: 'warning',
+				message: `URL returned HTTP 404: ${server.url('/missing')}`,
+			},
+			{
+				file: 'guide.md', line: 1, severity: 'warning',
+				message: `URL returned HTTP 500: ${server.url('/boom')}`,
+			},
+		])
+	})
+
+	test('check_urls: a clean URL alongside a bad one yields exactly one warning', async () => {
+		const content = [server.url('/ok'), server.url('/missing')].join('\n')
+		const messages = await check_urls([md_entry('SKILL.md', content)], {timeout_ms: 1000})
+		assert.deepStrictEqual(messages, [{
+			file: 'SKILL.md',
+			line: 2,
+			severity: 'warning',
+			message: `URL returned HTTP 404: ${server.url('/missing')}`,
+		}])
+	})
+
+	test('check_urls: does not scan binary entries (a URL in their bytes is never probed)', async () => {
+		// If this Buffer were wrongly decoded and scanned, /missing would be requested.  Because
+		// it is binary it must be skipped, so the server never sees it and no warning is emitted.
+		const messages = await check_urls(
+			[binary_entry('logo.png', `see ${server.url('/missing')}`)],
+			{timeout_ms: 1000},
+		)
+		assert.deepStrictEqual(messages, [])
+		assert.equal(server.count('/missing'), 0)
+	})
+
+	test('check_urls: translates the reported line through line_map (.source.md)', async () => {
+		// URL sits on content line index 2; line_map maps that to source line index 5 -> line 6.
+		const content = ['# Skill', '', server.url('/missing')].join('\n')
+		const messages = await check_urls(
+			[md_entry('SKILL.source.md', content, [0, 1, 5])],
+			{timeout_ms: 1000},
+		)
+		assert.equal(messages[0].line, 6)
 	})
 })

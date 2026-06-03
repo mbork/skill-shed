@@ -657,13 +657,24 @@ Lint skill files for common errors before deployment.
     =test/check-urls.test.ts= (8 =classify_status= + 4 =describe_fetch_error= + 8 =check_url=
     against the local server, incl. redirect-follow and the 405->GET retry); =check-urls.ts= 100%
     coverage; full suite 482 pass
-  - [ ] =check_urls(manifest, {timeout_ms}): Promise<LintMessage[]>= — collect URLs with their
+  - [X] =check_urls(manifest, {timeout_ms}): Promise<LintMessage[]>= — collect URLs with their
     ={file, line}= from every string =target_content=, memoize one network check per unique URL
-    (bounded concurrency), emit one =warning= per occurrence; 2xx emits nothing.  Messages:
-    "URL may require auth (HTTP 401)", "URL returned HTTP 404", "URL unreachable: <reason>".
-    Memoize on the URL MINUS its =#fragment= (fragments are client-side, never sent to the
-    server, so =.../a= and =.../a#install= are one network resource) while still reporting the
-    full URL the author wrote.
+    (bounded concurrency), emit one =warning= per occurrence; 2xx emits nothing.  Memoize on the
+    URL MINUS its =#fragment= (fragments are client-side, so =.../a= and =.../a#install= are one
+    network resource) while still reporting the full URL the author wrote.  Done in
+    =src/check-urls.ts= (with =check_url=, not =lint.ts=: keeps the whole URL feature in one file
+    + one test file; the =LintMessage=/=Manifest= imports are =import type= only, so no runtime
+    cycle with =lint.ts=).  New positional =extract_url_occurrences(content): {url, line}[]= (NOT
+    deduped, 0-based line); =extract_urls= refactored to its deduped projection.  Helpers:
+    =collect_url_sites= (walks string entries, =line_map=-translates to 1-based source line,
+    skips binary), =probe_key= (strips =#fragment=), =probe_keys= (cursor-pool, =CONCURRENCY=8=),
+    =describe_url_status=.  DEVIATION from the planned message text: append the offending URL,
+    e.g. =URL returned HTTP 404: <url>= / =URL may require auth (HTTP 401): <url>= / =URL
+    unreachable (<reason>): <url>= — disambiguates multiple URLs on one line.  14 tests in
+    =test/check-urls.test.ts= (3 =extract_url_occurrences=, 11 =check_urls=: clean->none, 404, 401,
+    timeout, per-occurrence, probe-once via =count()=, fragment-share, multi-file, binary skip,
+    clean+bad mix, =line_map= translation); =check-urls.ts= 100% coverage; full suite 497 pass.
+    NOTE: not yet wired into =lint()= — that is the flag substep below.
   - [ ] Per-request timeout injectable via =SKILL_SHED_URL_TIMEOUT_MS= (default 10000), read in
     =lint= and passed down (tests set ~100ms; see Decision)
   - [ ] Wire the flag: add =check-urls= boolean to =parseArgs= in =src/skill-shed.ts=; thread
@@ -870,6 +881,86 @@ Lint skill files for common errors before deployment.
 - Decisions: NONE (all logged mid-session)
 
 ** Decisions
+*** [2026-06-02] – =check_urls= lives in =check-urls.ts=; warnings append the offending URL
+**** Reason
+Keep the whole URL-checking feature (=extract_urls=, =check_url=, =check_urls=) in one module with
+one test file (=test/check-urls.test.ts=, which already wires =start_test_server=/=closed_port=).
+=check_urls= needs =LintMessage= and =Manifest=, but both are =import type= only, so with
+=verbatimModuleSyntax= they are erased — no runtime import cycle with =lint.ts= (which will import
+=check_urls= as a value).  Message text appends the URL — =URL returned HTTP 404: <url>=, =URL may
+require auth (HTTP 401): <url>=, =URL unreachable (<reason>): <url>= — so a line carrying several
+URLs is unambiguous.
+**** Alternatives considered
+- Put =check_urls= in =lint.ts= beside the other =check_*= functions (rejected: the type-only
+  imports make co-locating it with =check_url= cost-free at runtime, and cohesion + reusing the
+  already-wired test file win).
+- Keep the planned URL-less message templates (=URL returned HTTP 404=) (rejected: ambiguous when
+  one source line has more than one URL; the file+line alone does not disambiguate).
+
+*** [2026-06-02] – =extract_url_occurrences= is the positional primitive; =extract_urls= its projection
+**** Reason
+=check_urls= needs one entry per occurrence (to warn at every site) with a line number, not the
+deduped set.  Added =extract_url_occurrences(content): {url, line}[]= (0-based line, not deduped)
+and refactored =extract_urls= to be its dedupe-in-first-occurrence-order projection.  A URL never
+spans a line (its body stops at any whitespace, =\n= included), so scanning line by line is
+equivalent to the old whole-content =matchAll= and yields the line index for free; the 23 existing
+=extract_urls= tests pin that equivalence.
+**** Alternatives considered
+- Keep =extract_urls='s whole-content =matchAll= and add a separate positional scanner (rejected:
+  duplicates the regex + =strip_trailing_punctuation= logic for no benefit).
+
+*** [2026-06-02] – =check_url=: export pure helpers for coverage; positive =is_head_supported=; no =501= route
+**** Reason
+=classify_status= and =describe_fetch_error= are pure and exported solely so their branches that
+are unreachable through a real =fetch= (a sub-200 final status; a non-=Error= rejection) reach 100%
+via direct unit calls, honoring the no-=c8 ignore= policy.  After reordering so the HEAD-supported
+branch comes first, the guard is the positive =is_head_supported = status !== 405 && status !==
+501= (over =!is_head_unsupported=) — no double negative on the primary branch.  No dedicated =/501=
+server route: the =405 || 501= =||=-branch coverage is already met by =/head-405= (retry path) plus
+the non-retry routes, and 405/501 share one code path.
+**** Alternatives considered
+- =c8 ignore= the fetch-unreachable branches (rejected: project policy forbids it).
+- Keep =!is_head_unsupported= (rejected: a double negative on the hot branch reads worse; the
+  cost is a one-time De Morgan flip at the definition).
+- Add a =/501= route (rejected: redundant; =/head-405= already exercises the HEAD->GET retry).
+
+*** [2026-06-02] – =closed_port()= for a real ECONNREFUSED; accept the negligible port-reuse race
+**** Reason
+The synthetic =describe_fetch_error= unit test only mocks a connection failure; =closed_port()=
+(bind an ephemeral =127.0.0.1:0=, read the port, release it) drives a real ECONNREFUSED through
+=check_url=, fully offline.  The bind-then-release leaves a genuine TOCTOU window (another process
+could take the port before the probe connects), accepted as negligible: the window is sub-ms and
+in-process, the OS does not immediately recycle a just-freed ephemeral port, and only a new
+*listener* on that exact port (not a mere client using it as a local port) would flip the result.
+**** Alternatives considered
+- The journal's =http://127.0.0.1:1/= (rejected: port 1 is on =fetch='s blocked-ports list, so it
+  is refused as "bad port" WITHOUT connecting — a different code path, not ECONNREFUSED).
+- Hold a bound-but-not-listening socket for a race-free target (rejected: Node's =net.Server= does
+  not cleanly expose bind-without-listen; not worth the complexity for a microscopic flake risk).
+- Rely only on the synthetic unit test (rejected: never exercises a real network failure).
+
+*** [2026-06-01] – =TestServer= exposes =count()= but not the raw =requests[]=
+**** Reason
+Only the memoization assertion ("a duplicated URL is probed once") needs request observation, and
+=count(path)= is exactly the right tool for it.  Keep the internal =requests= array (it backs
+=count=) but drop the public =requests[]= accessor as speculative surface.
+**** Alternatives considered
+- Expose =requests[]= too (rejected: YAGNI; =count= covers the one realistic need).
+- Drop =count= as well (rejected: the memoization test genuinely uses it, and it is the cleanest
+  way to assert "fetched once").
+
+*** [2026-05-31] – The test HTTP server is module-only (no standalone runner)
+**** Reason
+Dropping the =node test/http-test-server.ts= self-start removes a sharp edge: =node --test= runs
+every =.ts= under =test/= in its own subprocess whose =process.argv[1]= IS that file, so an
+argv-based =is_main= fired under the runner and the started server hung the suite.  A module-only
+file just loads as a harmless zero-test module — no guard needed.  Poke the routes by hand via a
+throwaway importer instead (recipe in the step notes).
+**** Alternatives considered
+- Keep the standalone runner, gated on =NODE_TEST_CONTEXT= to suppress it under =node --test=
+  (rejected by the user as too complicated for what it buys).
+- Keep the argv-only =is_main= (rejected: hangs =node --test=, as observed).
+
 *** [2026-05-31] – =extract_urls=: lexical extraction, balanced-paren trimming, private helper
 **** Reason
 =extract_urls(content): string[]= is a purely lexical scanner: it matches =https?://= bodies
