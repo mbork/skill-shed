@@ -742,6 +742,25 @@ Lint skill files for common errors before deployment.
   replace =validate_manifest= calls with the lint pass and delete =validate_manifest=
 
 ** Session log
+*** [2026-06-03] (session 15)
+- Completed: finished the whole =--check-urls= feature (substeps 2-8).  Module-only
+  =test/http-test-server.ts= (+ =closed_port= for a real ECONNREFUSED); =check_url=
+  (HEAD->GET-on-405/501, =AbortController= timeout, classify); =check_urls= in =check-urls.ts=
+  (one warning per occurrence, fragment-stripped memo key, bounded concurrency) with the new
+  positional =extract_url_occurrences=; =SKILL_SHED_URL_TIMEOUT_MS= via =read_url_timeout()= and
+  the =--check-urls= flag wired through =parseArgs=/=dispatch= into =lint= (lint-only); =run_lint=
+  forwards =env=; =lint_help= documents both.  Renamed the test route =/slow= -> =/never=.  Skill
+  linting now [16/16], marked DONE.  Full suite 503 pass; =check-urls.ts=/=lint.ts=/=skill-shed.ts=
+  100% coverage.  Five commits (test server, =check_url=, =check_urls=, flag wiring, help).
+- In progress: NONE.
+- Next: write the README.org section for =--check-urls= as part of the =Expand README.org= TODO
+  (the gap is captured in =README-REVIEW.md=).
+- Blockers: NONE.
+- Decisions: all logged under Decisions — module-only test server; =count()=-only =TestServer=;
+  export pure helpers (=classify_status=/=describe_fetch_error=/=read_url_timeout=) for 100%
+  coverage; =closed_port= for real ECONNREFUSED; =check_urls= in =check-urls.ts= via =import type=
+  (no runtime cycle); warnings append the offending URL; forever-hang =/never= over a delayed
+  endpoint.
 *** [2026-05-31] (session 14)
 - Completed: planned the whole =--check-urls= feature in =JOURNAL.org= (implementation substeps;
   the in-process local-server testing decision via =/assess=, with route table + test list; the
