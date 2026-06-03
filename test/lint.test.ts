@@ -1,10 +1,12 @@
 // * Imports
-import {test} from 'node:test'
+import {test, describe, before, after} from 'node:test'
 import assert from 'node:assert/strict'
 import {mkdir, writeFile} from 'node:fs/promises'
 import {join} from 'node:path'
 import {run_lint, make_skill_dir, run_script, setup_git, git_commit} from './helpers.ts'
-import {check_skill_md_exists, format_lint_message} from '../src/lint.ts'
+import {check_skill_md_exists, format_lint_message, read_url_timeout} from '../src/lint.ts'
+import {start_test_server} from './http-test-server.ts'
+import type {TestServer} from './http-test-server.ts'
 
 // Minimal valid frontmatter for a skill dir named "my-skill" (the default from make_skill_dir).
 const FRONTMATTER = [
@@ -2002,4 +2004,96 @@ test('lint: non-ENOENT error reading .env is reported via catch block', async ()
 
 	assert.strictEqual(result.code, 1)
 	assert.match(result.stderr, /Error:.*EISDIR/)
+})
+
+// * read_url_timeout (unit)
+// Deterministic process.env control covers every fallback branch; the CLI tests below prove the
+// value is actually wired into `lint` -> `check_urls`.
+
+function with_url_timeout_env<T>(value: string | undefined, fn: () => T): T {
+	const key = 'SKILL_SHED_URL_TIMEOUT_MS'
+	const saved = process.env[key]
+	if (value === undefined) {
+		delete process.env[key]
+	} else {
+		process.env[key] = value
+	}
+	try {
+		return fn()
+	} finally {
+		if (saved === undefined) {
+			delete process.env[key]
+		} else {
+			process.env[key] = saved
+		}
+	}
+}
+
+test('read_url_timeout: defaults to 10000 when unset', () => {
+	assert.equal(with_url_timeout_env(undefined, read_url_timeout), 10000)
+})
+
+test('read_url_timeout: uses a valid positive value', () => {
+	assert.equal(with_url_timeout_env('250', read_url_timeout), 250)
+})
+
+test('read_url_timeout: falls back to the default for a non-numeric value', () => {
+	assert.equal(with_url_timeout_env('soon', read_url_timeout), 10000)
+})
+
+test('read_url_timeout: falls back to the default for a non-positive value', () => {
+	assert.equal(with_url_timeout_env('0', read_url_timeout), 10000)
+})
+
+// * lint --check-urls (integration, against the local server)
+
+describe('lint --check-urls', () => {
+	let server: TestServer
+
+	before(async () => {
+		server = await start_test_server()
+	})
+
+	after(() => server.close())
+
+	async function skill_with_url(url: string): Promise<string> {
+		const skill_dir = await make_skill_dir()
+		const body = [
+			'# My Skill',
+			'',
+			`See ${url} for details.`,
+			'',
+		].join('\n')
+		await writeFile(join(skill_dir, 'SKILL.md'), FRONTMATTER + body)
+		return skill_dir
+	}
+
+	test('lint --check-urls warns on a broken URL but exits 0 (warnings never fail)', async () => {
+		const skill_dir = await skill_with_url(server.url('/missing'))
+
+		const result = await run_lint(skill_dir, ['--check-urls'])
+
+		assert.strictEqual(result.code, 0)
+		assert.match(result.stdout, /warning: URL returned HTTP 404:/)
+	})
+
+	test('lint without --check-urls does not check URLs (opt-in)', async () => {
+		const skill_dir = await skill_with_url(server.url('/missing'))
+
+		const result = await run_lint(skill_dir)
+
+		assert.strictEqual(result.code, 0)
+		assert.doesNotMatch(result.stdout, /URL returned HTTP/)
+	})
+
+	test('lint --check-urls honors SKILL_SHED_URL_TIMEOUT_MS (a hung URL times out)', async () => {
+		const skill_dir = await skill_with_url(server.url('/never'))
+
+		const result = await run_lint(skill_dir, ['--check-urls'], {
+			env: {SKILL_SHED_URL_TIMEOUT_MS: '100'},
+		})
+
+		assert.strictEqual(result.code, 0)
+		assert.match(result.stdout, /warning: URL unreachable \(timeout\):/)
+	})
 })

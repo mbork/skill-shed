@@ -23,6 +23,7 @@ function parse_args(raw_args: string[]): {
 	third_arg: string | undefined
 	comments_mode: boolean | null
 	is_force: boolean
+	is_check_urls: boolean
 	command_line_source: ManifestSource
 } {
 	let parsed
@@ -38,6 +39,7 @@ function parse_args(raw_args: string[]): {
 				'workdir': {type: 'boolean'},
 				'staged': {type: 'boolean'},
 				'ref': {type: 'string'},
+				'check-urls': {type: 'boolean'},
 			},
 		})
 	} catch (err) {
@@ -58,6 +60,7 @@ function parse_args(raw_args: string[]): {
 	}
 	const comments_mode = values.comments ? true : values['no-comments'] ? false : null
 	const is_force = values.force ?? false
+	const is_check_urls = values['check-urls'] ?? false
 
 	const command_line_source_flags = [
 		values.clean, values.workdir, values.staged, values.ref !== undefined,
@@ -76,7 +79,9 @@ function parse_args(raw_args: string[]): {
 		command_line_source = {kind: 'ref', ref: values.ref}
 	}
 
-	return {command, second_arg, third_arg, comments_mode, is_force, command_line_source}
+	return {
+		command, second_arg, third_arg, comments_mode, is_force, is_check_urls, command_line_source,
+	}
 }
 
 // * dispatch
@@ -86,6 +91,7 @@ async function dispatch(
 	third_arg: string | undefined,
 	comments_mode: boolean | null,
 	is_force: boolean,
+	is_check_urls: boolean,
 	command_line_source: ManifestSource,
 ): Promise<void> {
 	if (command === 'help') {
@@ -99,7 +105,7 @@ async function dispatch(
 	} else if (command === 'deploy') {
 		await deploy(skill_dir, is_force, command_line_source)
 	} else if (command === 'lint') {
-		await lint(skill_dir, command_line_source)
+		await lint(skill_dir, command_line_source, {is_check_urls})
 	} else {
 		help_and_exit(command)
 	}
@@ -115,9 +121,11 @@ async function main(): Promise<void> {
 	}
 
 	const {
-		command, second_arg, third_arg, comments_mode, is_force, command_line_source,
+		command, second_arg, third_arg, comments_mode, is_force, is_check_urls, command_line_source,
 	} = parse_args(raw_args)
-	await dispatch(command, second_arg, third_arg, comments_mode, is_force, command_line_source)
+	await dispatch(
+		command, second_arg, third_arg, comments_mode, is_force, is_check_urls, command_line_source,
+	)
 }
 
 if (import.meta.main) {

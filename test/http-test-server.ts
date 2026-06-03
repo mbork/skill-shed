@@ -14,11 +14,11 @@ import type {AddressInfo} from 'node:net'
 //   /forbidden -> 403
 //   /missing   -> 404
 //   /boom      -> 500
-//   /slow      -> never responds (the connection hangs, forcing a client-side timeout)
+//   /never     -> never responds (the connection hangs, forcing a client-side timeout)
 //   /head-405  -> 405 on HEAD, 200 on GET (covers the HEAD->GET fallback)
 //   any other  -> 404
 //
-// `/slow` deliberately leaks an open connection; `close()` calls `closeAllConnections()` so a
+// `/never` deliberately leaks an open connection; `close()` calls `closeAllConnections()` so a
 // throwing test cannot wedge `node --test` exit on the dangling socket.
 
 // ** route
@@ -48,8 +48,9 @@ function route(method: string, path: string, res: ServerResponse): void {
 			res.writeHead(500)
 			res.end()
 			return
-		case '/slow':
-			// Never respond, so the client's timeout fires.
+		case '/never':
+			// Never responds (no server-side timer to leak), forcing a client-side timeout — see
+			// the [2026-06-03] decision on why this is not a delayed-response endpoint.
 			return
 		case '/head-405':
 			if (method === 'HEAD') {
@@ -67,7 +68,7 @@ function route(method: string, path: string, res: ServerResponse): void {
 }
 
 // ** close_server
-// Destroys open connections (so a hanging `/slow` socket cannot block shutdown) and stops the
+// Destroys open connections (so a hanging `/never` socket cannot block shutdown) and stops the
 // listener.  Kept at module scope to keep `start_test_server` clear of triple-nested callbacks.
 function close_server(server: Server): Promise<void> {
 	server.closeAllConnections()

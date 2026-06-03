@@ -675,28 +675,35 @@ Lint skill files for common errors before deployment.
     timeout, per-occurrence, probe-once via =count()=, fragment-share, multi-file, binary skip,
     clean+bad mix, =line_map= translation); =check-urls.ts= 100% coverage; full suite 497 pass.
     NOTE: not yet wired into =lint()= — that is the flag substep below.
-  - [ ] Per-request timeout injectable via =SKILL_SHED_URL_TIMEOUT_MS= (default 10000), read in
-    =lint= and passed down (tests set ~100ms; see Decision)
-  - [ ] Wire the flag: add =check-urls= boolean to =parseArgs= in =src/skill-shed.ts=; thread
+  - [X] Per-request timeout injectable via =SKILL_SHED_URL_TIMEOUT_MS= (default 10000), read in
+    =lint= and passed down (tests set ~100ms; see Decision).  Done: =read_url_timeout()= in
+    =lint.ts= — =Number(env)=, falls back to the 10000 default when unset, non-numeric, or
+    non-positive (=isFinite && > 0=); exported for 4 unit tests covering the fallback branches.
+  - [X] Wire the flag: add =check-urls= boolean to =parseArgs= in =src/skill-shed.ts=; thread
     =is_check_urls= through =dispatch= into =lint(skill_dir, source, {is_check_urls})=; lint-only
     (NOT =deploy= — URL checks are warnings, network-slow, and unexpected at deploy time).  When
-    set, =await check_urls(...)= and append its messages to those of =lint_manifest= before reporting
+    set, =await check_urls(...)= and append its messages to those of =lint_manifest= before
+    reporting.  Done: =lint()= reads =read_url_timeout()=, calls =check_urls= on the true branch,
+    pushes its warnings; URL checks are warnings only so the error-based exit code is unchanged.
   - [ ] Update =lint_help= in =src/help.ts= (=--check-urls= and =SKILL_SHED_URL_TIMEOUT_MS=)
-  - [ ] Tests — in-process local HTTP server (see Decision [2026-05-31]); route table and test
+  - [X] Tests — in-process local HTTP server (see Decision [2026-05-31]); route table and test
     list are there.  Extend =run_lint= to forward =env=.  Coverage must stay 100% (no =c8 ignore=)
     - [X] =test/http-test-server.ts= done: module-only (no standalone runner — removed for
       simplicity).  =start_test_server()= returns a =TestServer= (=base_url=, =url(path)=,
-      =requests[]=, =count(path)=, =close()=) on an ephemeral =127.0.0.1= port; importing it has
+      =count(path)=, =close()=) on an ephemeral =127.0.0.1= port; importing it has
       no side effects (nothing listens until called).  =close()= calls =closeAllConnections()=
-      first so a hung =/slow= socket cannot wedge =node --test= exit.
+      first so a hung =/never= socket cannot wedge =node --test= exit.
     - [X] Manual check (verified end-to-end this way on [2026-06-01]): from the repo root, run a
       throwaway importer, e.g.
       =node --input-type=module -e "import {start_test_server} from './test/http-test-server.ts'; const s = await start_test_server(); for (const p of ['/ok','/redirect','/auth','/forbidden','/missing','/boom']) console.log(p, (await fetch(s.url(p), {redirect: 'manual'})).status); await s.close()"=
       -> prints =200 302 401 403 404 500=.  =/head-405= needs =method: 'HEAD'= (405) vs a GET
-      (200); =/slow= needs an =AbortController= timeout (rejects =AbortError=).  These three plus
+      (200); =/never= needs an =AbortController= timeout (rejects =AbortError=).  These three plus
       =count()= are what the integration tests assert.
-    - [ ] Still to do here: integration tests in =test/lint.test.ts= driving these routes, and
-      extend =run_lint= to forward =env= (so tests can set =SKILL_SHED_URL_TIMEOUT_MS=).
+    - [X] =run_lint= now forwards =env= (merged onto =process.env=); 3 CLI integration tests in
+      =test/lint.test.ts= drive the server through the real =lint --check-urls= command: warns on a
+      404 and exits 0 (warnings never fail), no =--check-urls= skips URL checks (opt-in), and
+      =SKILL_SHED_URL_TIMEOUT_MS=100= makes =/never= time out quickly.  Component-level routing
+      (auth/redirect/multi-file/binary/fragment/=count()=) is covered in =test/check-urls.test.ts=.
   - [ ] README: document =--check-urls=, the three warning classes, and the timeout env var
 - [X] Warn on empty sections — heading with no content (warning)
 - [X] Warn on empty skill body — =SKILL.md= body returned by =extract_frontmatter= is
@@ -881,6 +888,26 @@ Lint skill files for common errors before deployment.
 - Decisions: NONE (all logged mid-session)
 
 ** Decisions
+*** [2026-06-03] – Timeout tests use a forever-hanging =/never= route, not a delayed-response one
+**** Reason
+The =--check-urls= timeout is exercised by a route that never responds (=/never=, renamed from
+=/never=) plus a short client timeout.  A delayed-response endpoint (responds after D ms, probed
+with =timeout < D < default=) would let the integration test distinguish "configured value
+honored" from "default fallback" by OUTCOME (timeout warning vs 200 OK), which the forever-hang
+cannot — both end as "unreachable (timeout)", differing only in duration.  But a delayed endpoint
+needs a server-side =setTimeout= that must be tracked and cleared on close, or it fires after the
+test, writing to a socket =closeAllConnections()= already destroyed (a flaky post-test error) and
+keeping the event loop alive.  The forever-hang has no timer (=closeAllConnections()= fully cleans
+it) and an infinite timing margin, and the exact value-honoring is already pinned deterministically
+by the =read_url_timeout= unit tests — so the integration test only needs to prove the pipeline
+wires up and emits a timeout warning, which the forever-hang does deterministically.
+**** Alternatives considered
+- Delayed-response endpoint + =timeout < delay= (e.g. =timeout=100=, =delay=500=): rejected —
+  re-proves at the integration layer what =read_url_timeout='s unit tests already cover, at the
+  cost of server-side timer cleanup (clear/=unref= + guard against writing to a destroyed socket)
+  and a finite timing margin; it also makes a separate forever-hang route redundant.
+- =timeout == delay= (e.g. both 500): rejected — a coin-flip race.
+
 *** [2026-06-02] – =check_urls= lives in =check-urls.ts=; warnings append the offending URL
 **** Reason
 Keep the whole URL-checking feature (=extract_urls=, =check_url=, =check_urls=) in one module with
@@ -999,7 +1026,7 @@ surfaced early as a plus.  Register =server.close()= / =closeAllConnections()= i
 hook so a throwing test cannot leak the listener and wedge =node --test= exit.
 **** Route table (server on =127.0.0.1:<port>=)
 - =/ok= -> 200; =/redirect= -> 302 =Location: /ok=; =/auth= -> 401; =/forbidden= -> 403;
-  =/missing= -> 404; =/boom= -> 500; =/slow= -> never responds (timeout); =/head-405= -> 405
+  =/missing= -> 404; =/boom= -> 500; =/never= -> never responds (timeout); =/head-405= -> 405
   on HEAD but 200 on GET (covers the HEAD->GET fallback).
 - Connection failure uses a valid-but-closed port from the =closed_port()= helper (bind an
   ephemeral =127.0.0.1:0=, read the port, release it), giving an immediate =ECONNREFUSED= while
@@ -1012,7 +1039,7 @@ hook so a throwing test cannot leak the listener and wedge =node --test= exit.
   multiple files with correct ={file, line}=.
 - Integration (=test/lint.test.ts=, =--check-urls= + local server): 200 -> clean lint;
   302->200 -> clean; 401 -> auth warning; 403 -> auth warning; 404 -> warning; 500 -> warning;
-  closed port -> unreachable warning; =/slow= + short timeout -> unreachable warning;
+  closed port -> unreachable warning; =/never= + short timeout -> unreachable warning;
   =/head-405= -> clean (GET fallback); a URL in a non-=SKILL.md= file is also checked; one good
   + one bad URL -> exactly one warning; a broken URL present but WITHOUT =--check-urls= ->
   clean (proves opt-in); exit code 0 despite broken URLs (warnings never fail lint);

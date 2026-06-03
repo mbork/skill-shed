@@ -9,6 +9,7 @@ import {
 } from './manifest.ts'
 import {classify_lines, is_section_empty, make_fence_tracker} from './md-parse.ts'
 import {extract_frontmatter, validate_frontmatter} from './frontmatter.ts'
+import {check_urls} from './check-urls.ts'
 
 // * Conventions
 // Lint checks operate on `target_content` by default — i.e. what gets deployed (after any
@@ -577,8 +578,29 @@ export function lint_manifest(skill_dir: string, manifest: Manifest): LintMessag
 	]
 }
 
+// * read_url_timeout
+// Per-request timeout (ms) for `--check-urls`, from `SKILL_SHED_URL_TIMEOUT_MS` (tests set a small
+// value).  Falls back to the default when the variable is unset, non-numeric, or non-positive.
+// Exported for direct unit testing of those fallback branches (deterministic process.env control).
+const URL_TIMEOUT_DEFAULT_MS = 10000
+
+export function read_url_timeout(): number {
+	const parsed = Number(process.env.SKILL_SHED_URL_TIMEOUT_MS)
+	if (Number.isFinite(parsed) && parsed > 0) {
+		return parsed
+	}
+	return URL_TIMEOUT_DEFAULT_MS
+}
+
 // * lint
-export async function lint(skill_dir: string, source: ManifestSource): Promise<void> {
+// `is_check_urls` (the `--check-urls` flag) is lint-only: when set, every http(s) URL in the
+// manifest is probed over the network and any non-OK result is appended as a warning.  URL checks
+// only ever produce warnings, so they never change the error-based exit code.
+export async function lint(
+	skill_dir: string,
+	source: ManifestSource,
+	options: {is_check_urls: boolean},
+): Promise<void> {
 	let manifest: Manifest
 	try {
 		manifest = await build_manifest(skill_dir, source)
@@ -587,6 +609,10 @@ export async function lint(skill_dir: string, source: ManifestSource): Promise<v
 		process.exit(1)
 	}
 	const messages = lint_manifest(skill_dir, manifest)
+	if (options.is_check_urls) {
+		const url_messages = await check_urls(manifest, {timeout_ms: read_url_timeout()})
+		messages.push(...url_messages)
+	}
 	const has_errors = report_lint_messages(messages, 'stdout')
 	if (has_errors) {
 		process.exit(1)

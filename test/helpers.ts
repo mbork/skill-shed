@@ -29,10 +29,17 @@ export async function run_init(skill_dir: string, deploy_dir?: string, flags: st
 	return run_script(['init', skill_dir, ...extra_args, ...flags], {env})
 }
 
-export async function run_lint(skill_dir: string, flags: string[] = []): Promise<Run_result> {
+export async function run_lint(
+	skill_dir: string,
+	flags: string[] = [],
+	options: {env?: NodeJS.ProcessEnv} = {},
+): Promise<Run_result> {
 	await setup_git(skill_dir)
 	await git_commit(skill_dir)
-	return run_script(['lint', skill_dir, ...flags])
+	// Merge onto the inherited env so a caller can set one variable (e.g. SKILL_SHED_URL_TIMEOUT_MS)
+	// without dropping PATH/HOME, which the subprocess needs for git and config.
+	const env = options.env ? {...process.env, ...options.env} : undefined
+	return run_script(['lint', skill_dir, ...flags], {env})
 }
 
 export async function run_deploy(skill_dir: string, options: {cwd?: string, flags?: string[]} = {}): Promise<Run_result> {

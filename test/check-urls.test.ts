@@ -308,7 +308,7 @@ describe('check_url', () => {
 
 	test('check_url: a hung response times out (unreachable)', async () => {
 		assert.deepStrictEqual(
-			await check_url(server.url('/slow'), 100),
+			await check_url(server.url('/never'), 100),
 			{kind: 'unreachable', reason: 'timeout'},
 		)
 	})
@@ -426,14 +426,14 @@ describe('check_urls', () => {
 
 	test('check_urls: an unreachable URL yields a warning (timeout)', async () => {
 		const messages = await check_urls(
-			[md_entry('SKILL.md', server.url('/slow'))],
+			[md_entry('SKILL.md', server.url('/never'))],
 			{timeout_ms: 100},
 		)
 		assert.deepStrictEqual(messages, [{
 			file: 'SKILL.md',
 			line: 1,
 			severity: 'warning',
-			message: `URL unreachable (timeout): ${server.url('/slow')}`,
+			message: `URL unreachable (timeout): ${server.url('/never')}`,
 		}])
 	})
 
