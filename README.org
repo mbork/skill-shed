@@ -17,7 +17,7 @@ Writing skills directly in =~/.your_favorite_coding_agent/skills= (or even in so
 then simply copying them there) is not sustainable:
 - While you can =git init= there, you'd probably prefer to have them under
   =~/my_side_projects/skills= or somewhere similar, for example because you use [[https://git-scm.com/docs/git-config#_conditional_includes][conditional includes]]
-  and want to have all your professional or side projects to live under a common directory.
+  and want all your professional or side projects to live under a common directory.
 - Skills are written in Markdown which does not support comments natively.  You can add a TODO/FIXME
   or maybe a rationale to your skill, but since skills enter the LLM's context, it's good to keep
   them short and to the point.  You could add a secondary file (not supposed to be read by the
@@ -40,7 +40,7 @@ then simply copying them there) is not sustainable:
 
 This project aims to solve these problems.  Currently, solutions to most but not all of these
 problems (version control in a separate directory, comment stripping, guard against accidental
-modifications in the target directory, linting skills) are implemented, but I'll be soon working on
+modifications in the target directory, linting skills) are implemented, but I'll soon be working on
 skills in non-Markdown formats.
 
 * Prerequisites
@@ -65,7 +65,7 @@ creates a directory =my-useful-skill= with two files: =.env= and =SKILL.source.m
 contains a template skill frontmatter, an HTML comment and a stub to fill with the skill's contents:
 #+begin_example
   ---
-  name: {{my-useful-skill}}
+  name: my-useful-skill
   description: >
     What this skill does – generates files?  Executes shell scripts?
     Sends HTTP requests?  When to use it – when the user asks or
@@ -79,11 +79,11 @@ contains a template skill frontmatter, an HTML comment and a stub to fill with t
        `.source` from its name.  For example, to disable stripping
        here, rename this file from `SKILL.source.md` to `SKILL.md`. -->
 
-  # {{My-useful-skill}} skill
+  # My-useful-skill skill
 #+end_example
-(The placeholders in double braces are replaced with the name of the skill directory.)  Edit them to
-your liking.  You can also create more files – either ending in =.source.md= (in which case they'll
-have their comments stripped, too) or anything else (=.md=, =.txt=, =.json=, ...) and say
+Edit them to your liking.  You can also create more files – either ending in =.source.md= (in which
+case they'll have their comments stripped, too) or anything else (=.md=, =.txt=, =.json=, ...) and
+say
 #+begin_src shell
   skill-shed deploy my-useful-skill
 #+end_src
@@ -92,8 +92,8 @@ in the same directory where you issued the =init= command, or just
   skill-shed deploy
 #+end_src
 in the newly created skill's directory – and all your skill's files will be copied to the target
-directory (=~/.agents/skills= by default), with all files ending in =.source.md= renamed to =.md=
-and with the comments (except the comments in fenced code blocks) stripped.
+directory (=~/.agents/skills/<skill-name>/= by default), with all files ending in =.source.md=
+renamed to =.md= and with the comments (except the comments in fenced code blocks) stripped.
 
 * Usage
 ** Initialize a skill directory
@@ -127,14 +127,22 @@ Check the correctness of a skill.  This means making sure that:
 - the skill will have =SKILL.md= when deployed,
 - no two source files will be transformed to the same target file,
 - all comments and code fences in Markdown files are properly closed,
-- no files contain empty sections nor sections with empty or duplicate titles,
+- no files contain empty sections or sections with empty or duplicate titles,
 - the heading levels in each Markdown file are correct,
 - no skill files are empty,
 - all files in a skill directory are referenced from =SKILL.md= (possibly via other files),
 - the =SKILL.md= file has correct YAML frontmatter and non-empty body not longer than 20000
   characters.
-Optionally (with =--check-urls=), =skill-shed lint= makes sure that every URL mentioned in every
-skill file resolves correctly.
+Optionally (with =--check-urls=), =skill-shed lint= warns about every http(s) URL mentioned in every
+skill file which does not resolve correctly.
+
+Less severe issues with a skill result in a warning, but a few (no =SKILL.md=, target conflicts,
+unclosed comments/fences, and frontmatter issues) are considered an error and make =skill-shed lint=
+exit with a status code of 1 (and abort the deploy).
+
+Note that by default, lint aborts if the skill directory is not a clean Git repo.  That can be
+changed with one of the flags: =--clean= (the default), =--workdir=, =--staged=, or =--ref <ref>=;
+see the [[*Deploy a skill][section about skill deployment]] for explanations of each of them.
 
 ** Deploy a skill
 #+begin_src shell
@@ -149,9 +157,9 @@ spans /will/ be stripped – this is a known limitation.)  This means that you c
 comments stripped) and =extra.md= where no renaming nor comment stripping will happen, both in the
 same skill directory.
 
-The skill directory must contain a file which will generate =SKILL.md= in target directory, that is,
-=SKILL.md= or =SKILL.source.md=.  Also, no two files in the skill directory may resolve to the same
-file in the target directory, so there must not be /both/ =SKILL.md= and =SKILL.source.md=.
+The skill directory must contain a file which will generate =SKILL.md= in the target directory, that
+is, =SKILL.md= or =SKILL.source.md=.  Also, no two files in the skill directory may resolve to the
+same file in the target directory, so there must not be /both/ =SKILL.md= and =SKILL.source.md=.
 
 If the skill directory contains files other than =SKILL.md= (or =SKILL.source.md=), they are treated
 in a similar way.  For example, =reference.md= or =data.csv= would be copied verbatim to the target
@@ -165,7 +173,7 @@ deleted on the next deploy.
 The four flags determine what exactly is deployed.
 
 - =--clean= (the default): deploy the last Git commit.  Abort if the skill directory has any
-  uncommitted changes (including untracked files).  If the skill-directory is part of a larger repo,
+  uncommitted changes (including untracked files).  If the skill directory is part of a larger repo,
   changes in directories outside it are ignored.  (If any files inside the skill directory are
   generated from files outside it, their uncommitted status will not be detected, so beware!)
 
@@ -178,7 +186,7 @@ The four flags determine what exactly is deployed.
 The =deploy= command creates a =.skill-shed-manifest.json= file in the target directory, containing
 a list of files deployed together with their SHA-256 hashes.  On subsequent deployments, the
 contents of the target directory are first compared to the data in this file.  If a change is
-detected (for example, when the user inadvertently editing the skill files there instead of in the
+detected (for example, when the user inadvertently edits the skill files there instead of in the
 skill directory), the deployment is aborted.
 
 Another file created in the target directory is =.skill-shed-deploy-in-progress=, created at the
@@ -187,8 +195,8 @@ by the user pressing =Ctrl-C= or any other reason), the next deployment will abo
 that the target directory is potentially in an inconsistent state and =.skill-shed-manifest.json=
 cannot be trusted).
 
-The =--force= flag forces a deployment even if the files in the target directory were changed not by
-=skill-shed deploy= or if the last =skill-shed deploy= was interrupted.
+The =--force= flag forces a deployment even if the files in the target directory were changed by
+something other than =skill-shed deploy= or if the last =skill-shed deploy= was interrupted.
 
 ** Get help
 Say =skill-shed help= to see the general help message, and =skill-shed help command= to see help for
@@ -216,8 +224,8 @@ And if you use [[https://claude.com/product/claude-code][Claude Code]], you may 
 
 Apart from that, every skill managed by =skill-shed= has its own little config – the =.env= file in
 the skill's directory.  This file may contain the following variables:
-- =TARGET_DIRECTORY=: copied by =init= from =DEFAULT_TARGET_DIRECTORY= (but can be changed anytime
-  without touching the default).
+- =TARGET_DIRECTORY=: the directory the skill files are copied to.  =skill-shed init= populates it
+  with =DEFAULT_TARGET_DIRECTORY= (resolved to an absolute path) with the skill name appended.
 - =MANIFEST_COMMAND=: (optional) command whose output is used as the skill file list.  The command
   given is run with =/bin/sh= and is expected to print a list of filenames (one per line) on stdout.
   This is potentially useful if the skill is not kept in a Git repo or in the unlikely case of
@@ -232,12 +240,16 @@ In both =TARGET_DIRECTORY= and =DEFAULT_TARGET_DIRECTORY= a tilde (=~=) at the b
 to the current user's home directory.  Also, if =TARGET_DIRECTORY= is not an absolute path, it is
 resolved relative to the skill directory.
 
+When using =--check-urls=, URLs which do not respond within 10 seconds are considered unreachable.
+Set the environment variable =SKILL_SHED_URL_TIMEOUT_MS= (in milliseconds) to shorten or lengthen
+the timeout.
+
 * Development
 - =npm ci= to populate =./node_modules=
-- =npm test= to run all tests (requires Git); to run a single section, e.g. =npm test
+- =npm test= to run all tests (requires Git); to run a single file, e.g. =npm test
   test/deploy.test.ts=
 - =npm run typecheck= to check typing
-- =npm run lint= to Eslint-check the source code
+- =npm run lint= to ESLint-check the source code
 
 ** Publishing a new release
 1. Bump =version= in =package.json=

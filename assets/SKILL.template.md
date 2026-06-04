@@ -5,7 +5,7 @@ description: >
   Sends HTTP requests?  When to use it – when the user asks or
   mentions something?  Uploads a file of specific type?  Fill the
   details in here.
-allowed-tools: Read, Bash(rg *)
+allowed-tools: Read Bash(rg *)
 ---
 
 <!-- NOTE: HTML comments are stripped on skill deployment, except
