@@ -276,7 +276,11 @@ deployed as a regular file.  This may or may not be the desired behavior.
 - [ ] Decide whether to deploy symlink targets as regular files, preserve symlinks, or reject them
 - [ ] Document the decision
 
-* TODO Expand =README.org= to cover all implemented features
+* DONE Expand =README.org= to cover all implemented features
+:LOGBOOK:
+- State "DONE"       from "INPROGRESS" [2026-06-04 Thu 22:28]
+- State "INPROGRESS" from "TODO"       [2026-06-04 Thu 22:27]
+:END:
 ** Steps [12/12]
 - [X] Document =MANIFEST_COMMAND= in =.skill.env=: custom shell command to list skill files (one per line, relative paths); include GNU/BSD find examples; explain use for non-git dirs
 - [X] Document sidecar file (=.skill-shed-manifest.json= in target dir): SHA-256 hashes of deployed files, drives overwrite/stale detection
@@ -292,6 +296,26 @@ deployed as a regular file.  This may or may not be the desired behavior.
 - [X] Clarify HTML comment stripping: fenced blocks (backtick and tilde), multiline comments preserved inside fences
 ** Decisions
 ** Session log
+*** [2026-06-04] (session 16)
+- Completed: closed the carried-over =--check-urls= README gap and did a full cold-read
+  pass, applying every factual, consistency, grammar, and missing-info fix over several
+  rounds.  Highlights: =init=
+  template example now shows the post-substitution result (not ={{...}}= placeholders);
+  default target stated as =~/.agents/skills/<skill-name>/=; =--check-urls= line rewritten
+  ("warns about http(s) URLs ... which do not resolve"); added the lint severity/exit-code
+  paragraph and the clean-repo-default note (with a link to the deploy flags); documented
+  =SKILL_SHED_URL_TIMEOUT_MS=; aligned =assets/SKILL.template.md= to space-separated
+  =allowed-tools= (spec form, matching the README).  Also swapped =lint=/=deploy= order in
+  the general help (=src/help.ts=).  Three commits.
+- In progress: NONE.  =README.org= is considered complete -- the three remaining review
+  items (triplicated =DEFAULT_TARGET_DIRECTORY= examples, the long motivation bullet, the
+  title styling) are deliberately left as-is; this feature is ready to mark DONE.
+- Next: run the linter against a real skill collection for integration validation (the
+  existing TODO) -- exercise the just-finished linting feature end-to-end on real skills.
+- Blockers: NONE
+- Decisions: in the template example, show the post-=init= result and drop the brace note
+  (over showing the raw ={{name}}=/={{Name}}= template); =allowed-tools= space-separated per
+  the agentskills.io spec.
 *** [2026-04-17]
 - Completed: reviewed =README.org= against all steps; marked 12 done and remove one; reviewed and committed user's =README.org= changes (1 commit)
 - In progress: NONE
